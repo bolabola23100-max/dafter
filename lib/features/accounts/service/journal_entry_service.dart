@@ -3,13 +3,11 @@ import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:uuid/uuid.dart';
 
 class JournalEntryService {
   final AppDatabase _database;
   final AccountRepository _accountRepository;
   final AccountTransactionRepository _transactionRepository;
-  final Uuid _uuid = const Uuid();
 
   JournalEntryService({
     AppDatabase? database,
@@ -19,6 +17,8 @@ class JournalEntryService {
        _accountRepository = accountRepository ?? AccountRepository(),
        _transactionRepository =
            transactionRepository ?? AccountTransactionRepository();
+
+  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
 
   Future<void> saveEntry({
     required String debitAccountId,
@@ -59,13 +59,13 @@ class JournalEntryService {
         throw Exception('رصيد الحساب الدائن مش مكفي');
       }
 
-      final entryId = _uuid.v4();
+      final entryId = _newId();
       final now = date ?? DateTime.now();
 
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _uuid.v4(),
+          id: _newId(),
           accountId: debitAccount.id,
           type: TransactionType.adjustment,
           amount: amount,
@@ -79,7 +79,7 @@ class JournalEntryService {
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _uuid.v4(),
+          id: _newId(),
           accountId: creditAccount.id,
           type: TransactionType.adjustment,
           amount: amount,
