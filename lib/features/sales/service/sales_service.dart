@@ -54,10 +54,6 @@ class SalesService {
         }
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId);
         if (account == null) throw Exception('الحساب غير موجود');
-        if (account.balance < sale.paidAmount) {
-          // في البيع الفلوس داخلة للحساب، فمش محتاجين رصيد سابق كشرط.
-          // الشرط هنا متعمد عدم تطبيقه.
-        }
       }
 
       if (sale.customerId != null) {
@@ -66,9 +62,10 @@ class SalesService {
       }
 
       for (final item in sale.items) {
+        if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
+        if (item.subtotal < 0) throw Exception('سعر أو خصم الصنف غير صحيح');
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج غير موجود');
-        if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
         if (product.quantity < item.quantity) {
           throw Exception('الكمية مش مكفية من: ${product.name}');
         }
