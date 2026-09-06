@@ -1,4 +1,6 @@
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
+import 'package:dafter/features/model/supplier.dart';
+import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
 import 'package:flutter/material.dart';
 
 class AddSupplierScreen extends StatefulWidget {
@@ -10,6 +12,7 @@ class AddSupplierScreen extends StatefulWidget {
 
 class _AddSupplierScreenState extends State<AddSupplierScreen> {
   final _formKey = GlobalKey<FormState>();
+  final SupplierRepository _supplierRepository = SupplierRepository();
 
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
@@ -18,6 +21,7 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
   final notesController = TextEditingController();
 
   String balanceType = 'لا يوجد رصيد';
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -29,17 +33,76 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
     super.dispose();
   }
 
-  void saveSupplier() {
+  Future<void> saveSupplier() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
-    Navigator.pop(context);
+    double openingBalance = 0;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم حفظ المورد بنجاح'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (balanceType == 'علينا') {
+      final value = double.tryParse(
+        openingBalanceController.text.trim().replaceAll(',', '.'),
+      );
+
+      if (value == null || value < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('من فضلك أدخل مبلغًا صحيحًا'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      openingBalance = value;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    final supplier = Supplier(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: nameController.text.trim(),
+      phone: _emptyToNull(phoneController.text),
+      address: _emptyToNull(addressController.text),
+      notes: _emptyToNull(notesController.text),
+      openingBalance: openingBalance,
+      balance: openingBalance,
     );
+
+    try {
+      await _supplierRepository.addSupplier(supplier);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم حفظ المورد بنجاح'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تعذر حفظ المورد: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  String? _emptyToNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   @override
@@ -90,17 +153,13 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 16),
-
                         _field(
                           controller: addressController,
                           label: 'العنوان',
                           hint: 'عنوان المورد',
                         ),
-
                         const SizedBox(height: 16),
-
                         _field(
                           controller: notesController,
                           label: 'ملاحظات',
@@ -110,9 +169,7 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
                   _Card(
                     title: 'الرصيد الافتتاحي',
                     icon: Icons.account_balance_wallet_outlined,
@@ -123,15 +180,16 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
                           'هل يوجد مبلغ مستحق عند بداية التعامل؟',
                           style: TextStyle(color: Colors.grey),
                         ),
-
                         const SizedBox(height: 14),
-
                         RadioGroup<String>(
                           groupValue: balanceType,
                           onChanged: (value) {
                             if (value != null) {
                               setState(() {
                                 balanceType = value;
+                                if (value == 'لا يوجد رصيد') {
+                                  openingBalanceController.clear();
+                                }
                               });
                             }
                           },
@@ -152,7 +210,6 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
                             ],
                           ),
                         ),
-
                         if (balanceType == 'علينا') ...[
                           const SizedBox(height: 10),
                           _field(
@@ -160,27 +217,42 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
                             label: 'المبلغ المستحق',
                             hint: '0.00',
                             suffix: 'ج.م',
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            validator: (value) {
+                              final amount = double.tryParse(
+                                (value ?? '').trim().replaceAll(',', '.'),
+                              );
+                              if (amount == null || amount < 0) {
+                                return 'أدخل مبلغًا صحيحًا';
+                              }
+                              return null;
+                            },
                           ),
                         ],
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: _isSaving ? null : () => Navigator.pop(context),
                         child: const Text('إلغاء'),
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton.icon(
-                        onPressed: saveSupplier,
-                        icon: const Icon(Icons.check),
-                        label: const Text('حفظ المورد'),
+                        onPressed: _isSaving ? null : saveSupplier,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.check),
+                        label: Text(_isSaving ? 'جارٍ الحفظ...' : 'حفظ المورد'),
                       ),
                     ],
                   ),
@@ -201,19 +273,21 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
     String? suffix,
     TextInputType? keyboardType,
     int maxLines = 1,
+    String? Function(String?)? validator,
   }) {
     return CustomTextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
-      validator: required
-          ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'هذا الحقل مطلوب';
-              }
-              return null;
-            }
-          : null,
+      validator: validator ??
+          (required
+              ? (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'هذا الحقل مطلوب';
+                  }
+                  return null;
+                }
+              : null),
       decoration: InputDecoration(
         labelText: required ? '$label *' : label,
         hintText: hint,
