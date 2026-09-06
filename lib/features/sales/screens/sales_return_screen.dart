@@ -57,7 +57,6 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         _accountRepository.getAccounts(),
         _productRepository.getProducts(),
       ]);
-
       if (!mounted) return;
       setState(() {
         _sales = results[0] as List<Sale>;
@@ -74,17 +73,13 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   }
 
   void _selectSale(Sale? sale) {
-    for (final controller in _quantityControllers.values) {
-      controller.dispose();
-    }
+    for (final controller in _quantityControllers.values) controller.dispose();
     _quantityControllers.clear();
-
     if (sale != null) {
       for (final item in sale.items) {
         _quantityControllers[item.id] = TextEditingController(text: '0');
       }
     }
-
     setState(() {
       _selectedSale = sale;
       _selectedAccount = null;
@@ -92,14 +87,18 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     });
   }
 
+  double _effectiveUnitPrice(SaleItem item) {
+    if (item.quantity <= 0) return item.price;
+    return item.subtotal / item.quantity;
+  }
+
   double _returnTotal() {
     final sale = _selectedSale;
     if (sale == null) return 0;
-
     double total = 0;
     for (final item in sale.items) {
       final quantity = int.tryParse(_quantityControllers[item.id]?.text.trim() ?? '') ?? 0;
-      total += quantity * item.price;
+      total += quantity * _effectiveUnitPrice(item);
     }
     return total;
   }
@@ -112,6 +111,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       return;
     }
 
+    final returnId = _id();
     final returnItems = <SaleReturnItem>[];
     for (final item in sale.items) {
       final quantity = int.tryParse(_quantityControllers[item.id]?.text.trim() ?? '') ?? 0;
@@ -123,11 +123,11 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         returnItems.add(
           SaleReturnItem(
             id: _id(),
-            returnId: _id(),
+            returnId: returnId,
             saleItemId: item.id,
             productId: item.productId,
             quantity: quantity,
-            price: item.price,
+            price: _effectiveUnitPrice(item),
           ),
         );
       }
@@ -149,20 +149,6 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       return;
     }
 
-    final returnId = _id();
-    final fixedItems = returnItems
-        .map(
-          (item) => SaleReturnItem(
-            id: item.id,
-            returnId: returnId,
-            saleItemId: item.saleItemId,
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-          ),
-        )
-        .toList();
-
     setState(() => _isSaving = true);
     try {
       await _service.createReturn(
@@ -171,13 +157,12 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
           saleId: sale.id,
           customerId: sale.customerId,
           date: DateTime.now(),
-          items: fixedItems,
+          items: returnItems,
           refundedAmount: refund,
           notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         ),
         accountId: _selectedAccount?.id,
       );
-
       if (!mounted) return;
       _message('المرتجع اتحفظ والمخزون والأرصدة اتحدثت');
       Navigator.pop(context, true);
@@ -192,9 +177,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   String _id() => DateTime.now().microsecondsSinceEpoch.toString();
 
   void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
   }
 
   String _saleLabel(Sale sale) {
@@ -206,11 +189,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8F9),
-      appBar: AppBar(
-        title: const Text('مرتجع بيع'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('مرتجع بيع'), backgroundColor: Colors.white, surfaceTintColor: Colors.white),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Center(
@@ -227,12 +206,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                           initialValue: _selectedSale,
                           isExpanded: true,
                           decoration: _decoration('اختار الفاتورة'),
-                          items: _sales
-                              .map((sale) => DropdownMenuItem<Sale>(
-                                    value: sale,
-                                    child: Text(_saleLabel(sale)),
-                                  ))
-                              .toList(),
+                          items: _sales.map((sale) => DropdownMenuItem<Sale>(value: sale, child: Text(_saleLabel(sale)))).toList(),
                           onChanged: _selectSale,
                         ),
                       ),
@@ -249,9 +223,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                                   controller: _refundController,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   onChanged: (_) => setState(() {}),
-                                  decoration: _decoration('المبلغ اللي هيرجع للعميل').copyWith(
-                                    suffixText: 'جنيه',
-                                  ),
+                                  decoration: _decoration('المبلغ اللي هيرجع للعميل').copyWith(suffixText: 'جنيه'),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -260,16 +232,8 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                                   initialValue: _selectedAccount,
                                   isExpanded: true,
                                   decoration: _decoration('الحساب اللي هتطلع منه الفلوس'),
-                                  items: _accounts
-                                      .map((account) => DropdownMenuItem<Account>(
-                                            value: account,
-                                            child: Text('${account.name} — ${account.balance.toStringAsFixed(2)} جنيه'),
-                                          ))
-                                      .toList(),
-                                  onChanged: double.tryParse(_refundController.text.trim()) != null &&
-                                          (double.tryParse(_refundController.text.trim()) ?? 0) > 0
-                                      ? (value) => setState(() => _selectedAccount = value)
-                                      : null,
+                                  items: _accounts.map((account) => DropdownMenuItem<Account>(value: account, child: Text('${account.name} — ${account.balance.toStringAsFixed(2)} جنيه'))).toList(),
+                                  onChanged: (double.tryParse(_refundController.text.trim()) ?? 0) > 0 ? (value) => setState(() => _selectedAccount = value) : null,
                                 ),
                               ),
                             ],
@@ -278,11 +242,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                         const SizedBox(height: 16),
                         _card(
                           title: 'ملاحظات',
-                          child: TextField(
-                            controller: _notesController,
-                            maxLines: 3,
-                            decoration: _decoration('ملاحظات اختيارية'),
-                          ),
+                          child: TextField(controller: _notesController, maxLines: 3, decoration: _decoration('ملاحظات اختيارية')),
                         ),
                         const SizedBox(height: 16),
                         _summaryCard(),
@@ -291,17 +251,9 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                           alignment: Alignment.centerLeft,
                           child: ElevatedButton.icon(
                             onPressed: _isSaving ? null : _save,
-                            icon: _isSaving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.save_outlined),
+                            icon: _isSaving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_outlined),
                             label: Text(_isSaving ? 'بيحفظ...' : 'حفظ المرتجع'),
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(180, 50),
-                            ),
+                            style: ElevatedButton.styleFrom(minimumSize: const Size(180, 50)),
                           ),
                         ),
                       ] else
@@ -325,25 +277,10 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               children: [
-                Expanded(
-                  flex: 4,
-                  child: Text(product?.name ?? 'منتج غير موجود'),
-                ),
-                Expanded(
-                  child: Text('اتباع: ${item.quantity}'),
-                ),
-                Expanded(
-                  child: Text('${item.price.toStringAsFixed(2)} جنيه'),
-                ),
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: controller,
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
-                    decoration: _decoration('المرتجع'),
-                  ),
-                ),
+                Expanded(flex: 4, child: Text(product?.name ?? 'منتج مش موجود')),
+                Expanded(child: Text('اتباع: ${item.quantity}')),
+                Expanded(child: Text('${_effectiveUnitPrice(item).toStringAsFixed(2)} جنيه')),
+                SizedBox(width: 130, child: TextField(controller: controller, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: _decoration('المرتجع'))),
               ],
             ),
           );
@@ -358,67 +295,20 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     final credit = (total - refund).clamp(0, double.infinity).toDouble();
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E9EB)),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _summary('قيمة المرتجع', total)),
-          Expanded(child: _summary('فلوس راجعة', refund)),
-          Expanded(child: _summary('هيتخصم من حساب العميل', credit)),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
+      child: Row(children: [Expanded(child: _summary('قيمة المرتجع', total)), Expanded(child: _summary('فلوس راجعة', refund)), Expanded(child: _summary('هيتخصم من حساب العميل', credit))]),
     );
   }
 
-  Widget _summary(String label, double value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey)),
-        const SizedBox(height: 6),
-        Text('${value.toStringAsFixed(2)} جنيه', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
+  Widget _summary(String label, double value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: Colors.grey)), const SizedBox(height: 6), Text('${value.toStringAsFixed(2)} جنيه', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))]);
 
-  Widget _emptyState() {
-    return _card(
-      title: 'مفيش فاتورة مختارة',
-      child: const Padding(
-        padding: EdgeInsets.all(25),
-        child: Text('اختار فاتورة بيع عشان تحدد الأصناف والكميات اللي هترجع.'),
-      ),
-    );
-  }
+  Widget _emptyState() => _card(title: 'مفيش فاتورة مختارة', child: const Padding(padding: EdgeInsets.all(25), child: Text('اختار فاتورة بيع عشان تحدد الأصناف والكميات اللي هترجع.')));
 
-  Widget _card({required String title, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E9EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 18),
-          child,
-        ],
-      ),
-    );
-  }
+  Widget _card({required String title, required Widget child}) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)), const SizedBox(height: 18), child]),
+      );
 
-  InputDecoration _decoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    );
-  }
+  InputDecoration _decoration(String label) => InputDecoration(labelText: label, filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)));
 }
