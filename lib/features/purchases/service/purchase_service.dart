@@ -7,16 +7,12 @@ import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
 import 'package:dafter/features/model/purchase.dart';
-import 'package:dafter/features/model/purchase_item.dart';
 import 'package:dafter/features/model/stock_movement.dart';
 import 'package:dafter/features/purchases/repo/purchase_repository.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
 
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
 class PurchaseService {
   final AppDatabase _database;
-
   final PurchaseRepository _purchaseRepository;
   final ProductRepository _productRepository;
   final SupplierRepository _supplierRepository;
@@ -38,42 +34,50 @@ class PurchaseService {
        _purchaseRepository = purchaseRepository ?? PurchaseRepository(),
        _productRepository = productRepository ?? ProductRepository(),
        _supplierRepository = supplierRepository ?? SupplierRepository(),
-       _stockMovementRepository =
-           stockMovementRepository ?? StockMovementRepository(),
+       _stockMovementRepository = stockMovementRepository ?? StockMovementRepository(),
        _paymentRepository = paymentRepository ?? PaymentRepository(),
        _accountRepository = accountRepository ?? AccountRepository(),
-       _accountTransactionRepository =
-           accountTransactionRepository ?? AccountTransactionRepository();
+       _accountTransactionRepository = accountTransactionRepository ?? AccountTransactionRepository();
 
-  Future<void> createPurchase({
-    required Purchase purchase,
-    String? accountId,
-  }) async {
+  Future<void> createPurchase({required Purchase purchase, String? accountId}) async {
+    if (purchase.items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
+    if (purchase.total < 0) throw Exception('إجمالي الفاتورة مينفعش يكون بالسالب');
+    if (purchase.paidAmount < 0 || purchase.paidAmount > purchase.total) {
+      throw Exception('المبلغ المدفوع غير صحيح');
+    }
+
     final db = await _database.database;
-
     await db.transaction((txn) async {
-      // 1️⃣ حفظ الفاتورة + الأصناف
+      if (purchase.supplierId != null) {
+        final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
+        if (supplier == null) throw Exception('المورد غير موجود');
+      }
+
+      for (final item in purchase.items) {
+        if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
+        if (item.subtotal < 0) throw Exception('سعر أو خصم الصنف غير صحيح');
+        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        if (product == null) throw Exception('المنتج غير موجود: ${item.productId}');
+      }
+
+      if (purchase.paidAmount > 0) {
+        if (accountId == null || accountId.isEmpty) {
+          throw Exception('اختار الحساب اللي دفعت منه الفلوس');
+        }
+        final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId);
+        if (account == null) throw Exception('الحساب غير موجود');
+        if (account.balance < purchase.paidAmount) {
+          throw Exception('رصيد الحساب مش كافي');
+        }
+      }
+
       await _purchaseRepository.addPurchaseWithExecutor(txn, purchase);
 
-      // 2️⃣ تحديث المخزون + تسجيل حركة المخزون
       for (final item in purchase.items) {
-        final product = await _productRepository.getProductByIdWithExecutor(
-          txn,
-          item.productId,
-        );
+        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        if (product == null) throw Exception('المنتج غير موجود: ${item.productId}');
 
-        if (product == null) {
-          throw Exception('المنتج غير موجود: ${item.productId}');
-        }
-
-        final newQuantity = product.quantity + item.quantity;
-
-        await _productRepository.updateStockWithExecutor(
-          txn,
-          product.id,
-          newQuantity,
-        );
-
+        await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity + item.quantity);
         await _stockMovementRepository.addMovementWithExecutor(
           txn,
           StockMovement(
@@ -88,46 +92,20 @@ class PurchaseService {
         );
       }
 
-      // 3️⃣ تحديث رصيد المورد
-      if (purchase.supplierId != null) {
-        final supplier = await _supplierRepository.getSupplierByIdWithExecutor(
-          txn,
-          purchase.supplierId!,
-        );
-
-        if (supplier == null) {
-          throw Exception('المورد غير موجود');
-        }
-
-        final newBalance = supplier.balance + purchase.remainingAmount;
-
+      if (purchase.supplierId != null && purchase.remainingAmount > 0) {
+        final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
+        if (supplier == null) throw Exception('المورد غير موجود');
         await _supplierRepository.updateBalanceWithExecutor(
           txn,
           supplier.id,
-          newBalance,
+          supplier.balance + purchase.remainingAmount,
         );
       }
 
-      // 4️⃣ تسجيل الدفع
       if (purchase.paidAmount > 0) {
-        if (accountId == null || accountId.isEmpty) {
-          throw Exception('يجب اختيار الحساب الذي تم الدفع منه');
-        }
+        final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
+        if (account == null) throw Exception('الحساب غير موجود');
 
-        final account = await _accountRepository.getAccountByIdWithExecutor(
-          txn,
-          accountId,
-        );
-
-        if (account == null) {
-          throw Exception('الحساب غير موجود');
-        }
-
-        if (account.balance < purchase.paidAmount) {
-          throw Exception('رصيد الحساب غير كافٍ');
-        }
-
-        // Payment
         await _paymentRepository.addPaymentWithExecutor(
           txn,
           Payment(
@@ -141,7 +119,6 @@ class PurchaseService {
           ),
         );
 
-        // Account Transaction
         await _accountTransactionRepository.addTransactionWithExecutor(
           txn,
           AccountTransaction(
@@ -156,17 +133,10 @@ class PurchaseService {
           ),
         );
 
-        // تحديث رصيد الحساب
-        await _accountRepository.updateBalanceWithExecutor(
-          txn,
-          account.id,
-          account.balance - purchase.paidAmount,
-        );
+        await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance - purchase.paidAmount);
       }
     });
   }
 
-  String _generateId() {
-    return DateTime.now().microsecondsSinceEpoch.toString();
-  }
+  String _generateId() => DateTime.now().microsecondsSinceEpoch.toString();
 }

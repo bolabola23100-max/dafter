@@ -20,4 +20,8 @@ class DatabaseTables {
   static const String accountTransactions = 'account_transactions';
 
   static const String transfers = 'transfers';
+  static const String purchaseReturns = 'purchase_returns';
+  static const String purchaseReturnItems = 'purchase_return_items';
+  static const String saleReturns = 'sale_returns';
+  static const String saleReturnItems = 'sale_return_items';
 }

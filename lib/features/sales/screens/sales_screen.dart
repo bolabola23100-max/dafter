@@ -1,196 +1,114 @@
-import 'package:dafter/features/sales/model/cart_item.dart';
-import 'package:dafter/features/sales/widgets/quick_products_selector.dart';
-import 'package:dafter/features/sales/widgets/sales_cart_table.dart';
-import 'package:dafter/features/sales/widgets/sales_summary_panel.dart';
+import 'package:dafter/features/model/sale.dart';
+import 'package:dafter/features/sales/repo/sales_repository.dart';
+import 'package:dafter/features/sales/screens/sales_invoice_screen.dart';
+import 'package:dafter/features/sales/screens/sales_return_screen.dart';
 import 'package:flutter/material.dart';
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({super.key});
-
   @override
   State<SalesScreen> createState() => _SalesScreenState();
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  final _discountController = TextEditingController(text: '0');
-  final _paidController = TextEditingController();
-
-  String? selectedCustomer;
-  String selectedPaymentMethod = 'نقدي';
-
-  final List<CartItem> _cartItems = [
-    CartItem(
-      productName: 'شاحن جداري أنكر 20 واط',
-      sku: 'ANK-20W-WHT',
-      price: 45,
-      quantity: 2,
-    ),
-    CartItem(
-      productName: 'كيبل ايفون قماش 1.5 متر',
-      sku: 'CBL-IP-PD-15',
-      price: 25.5,
-      quantity: 5,
-    ),
-  ];
-
-  // منتجات وهمية تظهر كأزرار سريعة للإضافة - هتتربط بقاعدة البيانات بعدين
-  final List<CartItem> _availableProducts = [
-    CartItem(
-      productName: 'شاحن جداري أنكر 20 واط',
-      sku: 'ANK-20W-WHT',
-      price: 45,
-    ),
-    CartItem(
-      productName: 'كيبل ايفون قماش 1.5 متر',
-      sku: 'CBL-IP-PD-15',
-      price: 25.5,
-    ),
-    CartItem(
-      productName: 'سماعة ايربودز برو الجيل الثاني',
-      sku: 'APP-AP-PRO2',
-      price: 899,
-    ),
-  ];
+  final SalesRepository _repository = SalesRepository();
+  List<Sale> _sales = [];
+  bool _loading = true;
 
   @override
-  void dispose() {
-    _discountController.dispose();
-    _paidController.dispose();
-    super.dispose();
+  void initState() { super.initState(); _load(); }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final sales = await _repository.getSales();
+      if (!mounted) return;
+      setState(() { _sales = sales; _loading = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _message('حصلت مشكلة وإحنا بنجيب المبيعات');
+    }
   }
 
-  double get _subtotal => _cartItems.fold(0, (sum, item) => sum + item.total);
-  double get _discount => double.tryParse(_discountController.text) ?? 0;
-  double get _tax => (_subtotal - _discount) * 0.15;
-  double get _grandTotal => (_subtotal - _discount) + _tax;
-  double get _paid => double.tryParse(_paidController.text) ?? 0;
-  double get _change => _paid - _grandTotal;
-
-  void _addProduct(CartItem product) {
-    setState(() {
-      final existing = _cartItems.where((item) => item.sku == product.sku);
-      if (existing.isNotEmpty) {
-        existing.first.quantity++;
-      } else {
-        _cartItems.add(
-          CartItem(
-            productName: product.productName,
-            sku: product.sku,
-            price: product.price,
-          ),
-        );
-      }
-    });
+  Future<void> _open(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    await _load();
   }
 
-  void _removeItem(int index) {
-    setState(() => _cartItems.removeAt(index));
-  }
-
-  void _saveInvoice() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تم حفظ الفاتورة بنجاح')));
-  }
+  void _message(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
+  String _date(DateTime date) => '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
   @override
   Widget build(BuildContext context) {
+    final total = _sales.fold<double>(0, (sum, sale) => sum + sale.total);
+    final paid = _sales.fold<double>(0, (sum, sale) => sum + sale.paidAmount);
+    final remaining = _sales.fold<double>(0, (sum, sale) => sum + sale.remainingAmount);
+
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // =========================================================
-          // Summary & Payment Panel
-          // =========================================================
-          SizedBox(
-            width: 280,
-            child: SingleChildScrollView(
-              child: SalesSummaryPanel(
-                itemsCount: _cartItems.length,
-                subtotal: _subtotal,
-                discount: _discount,
-                tax: _tax,
-                grandTotal: _grandTotal,
-                paid: _paid,
-                change: _change,
-                discountController: _discountController,
-                paidController: _paidController,
-                selectedPaymentMethod: selectedPaymentMethod,
-                onPaymentMethodChanged: (method) =>
-                    setState(() => selectedPaymentMethod = method),
-                onSaveAndPrint: _saveInvoice,
-                onSaveOnly: _saveInvoice,
-                onValuesChanged: () => setState(() {}),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // =========================================================
-          // Cart & Items Selection Section
-          // =========================================================
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE5E9EB)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedCustomer,
-                    decoration: const InputDecoration(
-                      labelText: 'العميل',
-                      isDense: true,
-                    ),
-                    hint: const Text('عميل نقدي (افتراضي)'),
-                    items: const [
-                      DropdownMenuItem(value: 'cash', child: Text('عميل نقدي')),
-                      DropdownMenuItem(
-                        value: 'c1',
-                        child: Text('مؤسسة الأفق للتجارة'),
-                      ),
-                    ],
-                    onChanged: (value) => setState(() => selectedCustomer = value),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  QuickProductsSelector(
-                    availableProducts: _availableProducts,
-                    onProductSelected: _addProduct,
-                  ),
-
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  const SizedBox(height: 16),
-
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: SalesCartTable(
-                        cartItems: _cartItems,
-                        onIncreaseQuantity: (index) =>
-                            setState(() => _cartItems[index].quantity++),
-                        onDecreaseQuantity: (index) => setState(() {
-                          if (_cartItems[index].quantity > 1) {
-                            _cartItems[index].quantity--;
-                          }
-                        }),
-                        onRemoveItem: _removeItem,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('المبيعات', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            SizedBox(height: 4),
+            Text('كل فواتير البيع واللي اتدفع واللي لسه', style: TextStyle(color: Colors.grey)),
+          ])),
+          OutlinedButton.icon(onPressed: () => _open(const SalesReturnScreen()), icon: const Icon(Icons.assignment_return_outlined), label: const Text('مرتجع بيع')),
+          const SizedBox(width: 10),
+          FilledButton.icon(onPressed: () => _open(const SalesInvoiceScreen()), icon: const Icon(Icons.add), label: const Text('فاتورة بيع جديدة')),
+        ]),
+        const SizedBox(height: 20),
+        Row(children: [
+          Expanded(child: _summary('إجمالي البيع', total, Icons.shopping_cart_outlined)),
+          const SizedBox(width: 12),
+          Expanded(child: _summary('اللي اتدفع', paid, Icons.payments_outlined)),
+          const SizedBox(width: 12),
+          Expanded(child: _summary('الباقي', remaining, Icons.pending_actions_outlined)),
+          const SizedBox(width: 12),
+          Expanded(child: _summary('عدد الفواتير', _sales.length.toDouble(), Icons.receipt_long_outlined, money: false)),
+        ]),
+        const SizedBox(height: 20),
+        Expanded(child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _sales.isEmpty
+            ? const Center(child: Text('لسه مفيش فواتير بيع'))
+            : Card(
+                clipBehavior: Clip.antiAlias,
+                child: ListView.separated(
+                  itemCount: _sales.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final sale = _sales[index];
+                    final status = sale.remainingAmount <= 0 ? 'مدفوعة' : sale.paidAmount > 0 ? 'جزئي' : 'آجل';
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
+                      title: Text('فاتورة بيع #${sale.id}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('${_date(sale.date)} • ${sale.items.length} أصناف • $status'),
+                      trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text(_money(sale.total), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        if (sale.remainingAmount > 0) Text('باقي ${_money(sale.remainingAmount)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                      ]),
+                    );
+                  },
+                ),
+              )),
+      ]),
     );
   }
+
+  Widget _summary(String title, double value, IconData icon, {bool money = true}) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(children: [
+        Icon(icon), const SizedBox(width: 10),
+        Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          const SizedBox(height: 5),
+          Text(money ? _money(value) : value.toInt().toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+        ])),
+      ]),
+    ),
+  );
 }

@@ -9,8 +9,8 @@ class SuppliersSummaryRow extends StatelessWidget {
   const SuppliersSummaryRow({
     super.key,
     required this.totalSuppliers,
-    this.totalDue = 22400.00,
-    this.monthlyPurchases = 92400.00,
+    required this.totalDue,
+    required this.monthlyPurchases,
   });
 
   @override
@@ -44,7 +44,6 @@ class SuppliersSummaryRow extends StatelessWidget {
             iconColor: const Color(0xFF0E4C4C),
             value: '${monthlyPurchases.toStringAsFixed(2)} ج.م',
             label: 'مشتريات الشهر',
-            trailingText: '+1.5% عن الشهر الماضي',
           ),
         ),
       ],
