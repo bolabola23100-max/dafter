@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:dafter/core/backup/backup_service.dart';
 import 'package:dafter/core/widgets/action_button.dart';
 import 'package:dafter/core/widgets/nav.dart';
 import 'package:dafter/features/reports/model/report_summary.dart';
@@ -19,11 +22,13 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   final ReportService _reportService = ReportService();
+  final BackupService _backupService = BackupService.instance;
 
   String selectedPeriod = 'هذا الشهر';
   String selectedReport = 'كل التقارير';
   ReportSummary _summary = const ReportSummary();
   bool _isLoading = true;
+  bool _isBackingUp = false;
 
   @override
   void initState() {
@@ -35,16 +40,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() => _isLoading = true);
     try {
       final range = _periodRange(selectedPeriod);
-      final summary = await _reportService.getSummary(
-        from: range.$1,
-        to: range.$2,
-      );
+      final summary = await _reportService.getSummary(from: range.$1, to: range.$2);
       if (!mounted) return;
       setState(() {
         _summary = summary;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _isLoading = false);
       _showSnackBar('حصلت مشكلة وإحنا بنجيب التقرير');
@@ -81,7 +83,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
       ),
     );
-
     if (result == null) return;
 
     setState(() {
@@ -89,6 +90,36 @@ class _ReportsScreenState extends State<ReportsScreen> {
       selectedReport = result['report'] ?? selectedReport;
     });
     await _loadReport();
+  }
+
+  Future<void> _chooseBackupFolder() async {
+    final selected = await _backupService.chooseBackupDirectory();
+    if (!mounted) return;
+    _showSnackBar(selected ? 'تم حفظ مكان النسخة الاحتياطية' : 'لم يتم اختيار مجلد');
+  }
+
+  Future<void> _backupNow() async {
+    setState(() => _isBackingUp = true);
+    try {
+      final directory = await _backupService.getBackupDirectory();
+      if (directory == null) {
+        await _chooseBackupFolder();
+        final selectedDirectory = await _backupService.getBackupDirectory();
+        if (selectedDirectory == null) return;
+      }
+
+      final file = await _backupService.backupDatabase(force: true);
+      if (!mounted) return;
+      _showSnackBar(
+        file == null ? 'مقدرتش أعمل النسخة الاحتياطية' : 'تم حفظ النسخة الاحتياطية بنجاح',
+      );
+    } on FileSystemException {
+      if (mounted) _showSnackBar('مقدرتش أكتب النسخة الاحتياطية في المجلد ده');
+    } catch (_) {
+      if (mounted) _showSnackBar('حصلت مشكلة أثناء النسخة الاحتياطية');
+    } finally {
+      if (mounted) setState(() => _isBackingUp = false);
+    }
   }
 
   void _showSnackBar(String message) {
@@ -143,12 +174,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _chooseBackupFolder,
+                  icon: const Icon(Icons.folder_outlined),
+                  label: const Text('اختيار مكان النسخة الاحتياطية'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isBackingUp ? null : _backupNow,
+                  icon: _isBackingUp
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.backup_outlined),
+                  label: Text(_isBackingUp ? 'جاري الحفظ...' : 'نسخة احتياطية الآن'),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           if (_isLoading)
-            const SizedBox(
-              height: 110,
-              child: Center(child: CircularProgressIndicator()),
-            )
+            const SizedBox(height: 110, child: Center(child: CircularProgressIndicator()))
           else
             ReportsSummaryRow(
               totalRevenue: _summary.netSales,
@@ -159,10 +209,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Row(
             children: [
               const Expanded(
-                child: Text(
-                  'ملخص التقارير',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                child: Text('ملخص التقارير', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
