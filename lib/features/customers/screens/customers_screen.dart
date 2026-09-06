@@ -3,6 +3,7 @@ import 'package:dafter/core/widgets/nav.dart';
 import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/customers/screens/add_customer_screen.dart';
+import 'package:dafter/features/customers/screens/customer_statement_screen.dart';
 import 'package:dafter/features/customers/screens/record_payment_screen.dart';
 import 'package:dafter/features/customers/widgets/customers_filter_bar.dart';
 import 'package:dafter/features/customers/widgets/customers_summary_row.dart';
@@ -41,20 +42,20 @@ class _CustomersScreenState extends State<CustomersScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('مش قادر أجيب العملاء: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('مش قادر أجيب العملاء: $e')),
+      );
     }
   }
 
   List<Customer> get _filteredCustomers {
     final query = _searchController.text.trim().toLowerCase();
-    return _customers.where((c) {
+    return _customers.where((customer) {
       final matchesSearch =
           query.isEmpty ||
-          c.name.toLowerCase().contains(query) ||
-          (c.phone ?? '').contains(query);
-      final matchesDebt = !showDebtorsOnly || c.balance > 0;
+          customer.name.toLowerCase().contains(query) ||
+          (customer.phone ?? '').contains(query);
+      final matchesDebt = !showDebtorsOnly || customer.balance > 0;
       return matchesSearch && matchesDebt;
     }).toList();
   }
@@ -69,8 +70,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Widget build(BuildContext context) {
     final totalDebt = _customers.fold<double>(
       0,
-      (sum, c) => sum + (c.balance > 0 ? c.balance : 0),
+      (sum, customer) => sum + (customer.balance > 0 ? customer.balance : 0),
     );
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -151,11 +153,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   Future<void> _showSelectCustomerDialog() async {
     if (_customers.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('لسه مفيش عملاء')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لسه مفيش عملاء')),
+      );
       return;
     }
+
     await showDialog<void>(
       context: context,
       builder: (_) => Directionality(
@@ -174,9 +177,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   subtitle: Text(
                     '${customer.balance.toStringAsFixed(2)} جنيه عليه',
                   ),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    _showCustomerDetails(customer);
+                    await Nav.push(
+                      context,
+                      CustomerStatementScreen(customerId: customer.id),
+                    );
+                    if (mounted) _loadCustomers();
                   },
                 );
               },
@@ -189,9 +196,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   void _showPaymentForAnyCustomer() {
     if (_customers.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ضيف عميل الأول')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ضيف عميل الأول')),
+      );
       return;
     }
     Nav.push(
@@ -208,17 +215,28 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   void _showCustomerDetails(Customer customer) {
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(customer.name),
         content: Text(
-          'الرصيد الحالي: ${customer.balance.toStringAsFixed(2)} جنيه\n\n${customer.balance > 0 ? 'العميل عليه فلوس.' : 'مفيش عليه فلوس حالياً.'}',
+          'الرصيد الحالي: ${customer.balance.toStringAsFixed(2)} جنيه\n\n'
+          '${customer.balance > 0 ? 'العميل عليه فلوس.' : 'مفيش عليه فلوس حالياً.'}',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('تمام'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Nav.push(
+                context,
+                CustomerStatementScreen(customerId: customer.id),
+              );
+            },
+            child: const Text('كشف الحساب'),
           ),
         ],
       ),
