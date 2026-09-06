@@ -89,9 +89,9 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
   }
 
   double get totalDue => suppliers.fold<double>(
-        0,
-        (sum, supplier) => sum + (supplier.balance > 0 ? supplier.balance : 0),
-      );
+    0,
+    (sum, supplier) => sum + (supplier.balance > 0 ? supplier.balance : 0),
+  );
 
   double get monthlyPurchases {
     final now = DateTime.now();
@@ -100,7 +100,8 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
     return purchases.fold<double>(
       0,
-      (sum, purchase) => purchase.date.isBefore(nextMonth) &&
+      (sum, purchase) =>
+          purchase.date.isBefore(nextMonth) &&
               !purchase.date.isBefore(monthStart)
           ? sum + purchase.total
           : sum,
@@ -108,9 +109,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
   }
 
   void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _open(Widget screen) async {
