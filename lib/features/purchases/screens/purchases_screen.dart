@@ -1,6 +1,7 @@
 import 'package:dafter/core/widgets/action_button.dart';
 import 'package:dafter/core/widgets/nav.dart';
 import 'package:dafter/features/model/purchase.dart';
+import 'package:dafter/features/purchases/repo/purchase_repository.dart';
 import 'package:dafter/features/purchases/screens/purchase_invoice_screen.dart';
 import 'package:dafter/features/purchases/screens/purchase_report_screen.dart';
 import 'package:dafter/features/purchases/screens/purchase_return_screen.dart';
@@ -20,20 +21,11 @@ class PurchasesScreen extends StatefulWidget {
 
 class _PurchasesScreenState extends State<PurchasesScreen> {
   String selectedFilter = 'الكل';
-
   final TextEditingController searchController = TextEditingController();
-
-  // =========================================================
-  // Real Purchases Data
-  // =========================================================
+  final PurchaseRepository _purchaseRepository = PurchaseRepository();
 
   List<Purchase> invoices = [];
-
   bool _isLoading = true;
-
-  // =========================================================
-  // Init
-  // =========================================================
 
   @override
   void initState() {
@@ -41,76 +33,55 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     _loadPurchases();
   }
 
-  // =========================================================
-  // Dispose
-  // =========================================================
-
   @override
   void dispose() {
     searchController.dispose();
     super.dispose();
   }
 
-  // =========================================================
-  // Load Purchases
-  // =========================================================
-
   Future<void> _loadPurchases() async {
-    /*
-     * هنربط هنا PurchaseService بعد ما نعمله.
-     *
-     * حاليًا مفيش أي بيانات وهمية.
-     */
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
 
-    if (!mounted) return;
+    try {
+      final purchases = await _purchaseRepository.getPurchases();
 
-    setState(() {
-      _isLoading = false;
-      invoices = [];
-    });
+      if (!mounted) return;
+
+      setState(() {
+        invoices = purchases;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+      _showMessage('تعذر تحميل فواتير الشراء: $e');
+    }
   }
-
-  // =========================================================
-  // Filtered Invoices
-  // =========================================================
 
   List<Purchase> get filteredInvoices {
     var result = List<Purchase>.from(invoices);
 
-    // -------------------------------------------------------
-    // Payment Filter
-    // -------------------------------------------------------
-
     if (selectedFilter == 'نقدي') {
-      result = result.where((invoice) {
-        return invoice.remainingAmount <= 0;
-      }).toList();
+      result = result.where((invoice) => invoice.remainingAmount <= 0).toList();
     }
 
     if (selectedFilter == 'آجل') {
-      result = result.where((invoice) {
-        return invoice.remainingAmount > 0;
-      }).toList();
+      result = result.where((invoice) => invoice.remainingAmount > 0).toList();
     }
 
     if (selectedFilter == 'غير مكتمل') {
-      result = result.where((invoice) {
-        return invoice.remainingAmount > 0;
-      }).toList();
+      result = result.where((invoice) => invoice.remainingAmount > 0).toList();
     }
-
-    // -------------------------------------------------------
-    // Search
-    // -------------------------------------------------------
 
     final query = searchController.text.trim().toLowerCase();
 
     if (query.isNotEmpty) {
       result = result.where((invoice) {
         final invoiceId = invoice.id.toLowerCase();
-
         final supplierId = invoice.supplierId?.toLowerCase() ?? '';
-
         return invoiceId.contains(query) || supplierId.contains(query);
       }).toList();
     }
@@ -118,25 +89,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     return result;
   }
 
-  // =========================================================
-  // Summary
-  // =========================================================
+  double get totalPurchases =>
+      invoices.fold(0, (sum, invoice) => sum + invoice.total);
 
-  double get totalPurchases {
-    return invoices.fold(0, (sum, invoice) => sum + invoice.total);
-  }
+  double get totalPaid =>
+      invoices.fold(0, (sum, invoice) => sum + invoice.paidAmount);
 
-  double get totalPaid {
-    return invoices.fold(0, (sum, invoice) => sum + invoice.paidAmount);
-  }
-
-  double get totalRemaining {
-    return invoices.fold(0, (sum, invoice) => sum + invoice.remainingAmount);
-  }
-
-  // =========================================================
-  // Message
-  // =========================================================
+  double get totalRemaining =>
+      invoices.fold(0, (sum, invoice) => sum + invoice.remainingAmount);
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -144,53 +104,39 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     );
   }
 
-  // =========================================================
-  // Add Purchase
-  // =========================================================
-
   Future<void> _openPurchaseInvoice() async {
-    await Nav.push(context, const PurchaseInvoiceScreen());
+    final result = await Nav.push(context, const PurchaseInvoiceScreen());
 
     if (!mounted) return;
 
-    await _loadPurchases();
+    if (result == true) {
+      await _loadPurchases();
+    }
   }
-
-  // =========================================================
-  // Add Supplier
-  // =========================================================
 
   Future<void> _openAddSupplier() async {
-    await Nav.push(context, const AddSupplierScreen());
+    final result = await Nav.push(context, const AddSupplierScreen());
 
     if (!mounted) return;
 
-    await _loadPurchases();
+    if (result == true) {
+      await _loadPurchases();
+    }
   }
-
-  // =========================================================
-  // Purchase Report
-  // =========================================================
 
   Future<void> _openPurchaseReport() async {
     await Nav.push(context, const PurchaseReportScreen());
   }
 
-  // =========================================================
-  // Purchase Return
-  // =========================================================
-
   Future<void> _openPurchaseReturn() async {
-    await Nav.push(context, const PurchaseReturnScreen());
+    final result = await Nav.push(context, const PurchaseReturnScreen());
 
     if (!mounted) return;
 
-    await _loadPurchases();
+    if (result == true) {
+      await _loadPurchases();
+    }
   }
-
-  // =========================================================
-  // Invoice Menu
-  // =========================================================
 
   void _showInvoiceMenu(Purchase invoice) {
     showModalBottomSheet(
@@ -204,27 +150,22 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
           invoice: invoice,
           onView: () {
             Nav.pop(context);
-
             _showMessage('عرض فاتورة #${invoice.id}');
           },
           onPdf: () {
             Nav.pop(context);
-
             _showMessage('سيتم تجهيز PDF لاحقًا');
           },
           onPrint: () {
             Nav.pop(context);
-
             _showMessage('سيتم تجهيز الطباعة لاحقًا');
           },
           onReturn: () {
             Nav.pop(context);
-
             _showMessage('إنشاء مرتجع شراء');
           },
           onDelete: () {
             Nav.pop(context);
-
             _deleteInvoice(invoice);
           },
         );
@@ -232,31 +173,20 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
     );
   }
 
-  // =========================================================
-  // Delete Invoice
-  // =========================================================
-
   Future<void> _deleteInvoice(Purchase invoice) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) {
         return AlertDialog(
           title: const Text('حذف الفاتورة؟'),
-          content: Text(
-            'هل أنت متأكد من حذف فاتورة '
-            '#${invoice.id}؟',
-          ),
+          content: Text('هل أنت متأكد من حذف فاتورة #${invoice.id}؟'),
           actions: [
             TextButton(
-              onPressed: () {
-                Nav.pop(context, false);
-              },
+              onPressed: () => Nav.pop(context, false),
               child: const Text('إلغاء'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Nav.pop(context, true);
-              },
+              onPressed: () => Nav.pop(context, true),
               child: const Text('حذف'),
             ),
           ],
@@ -264,23 +194,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
       },
     );
 
-    if (confirmed != true) {
-      return;
-    }
-
-    /*
-     * هنربط هنا PurchaseService.deletePurchase()
-     * بعد ما نعمل الـ Repository والـ Service.
-     */
-
-    if (!mounted) return;
+    if (confirmed != true) return;
 
     _showMessage('سيتم ربط حذف الفاتورة بقاعدة البيانات');
   }
-
-  // =========================================================
-  // Build
-  // =========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -289,9 +206,6 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // =====================================================
-          // Action Buttons
-          // =====================================================
           Row(
             children: [
               Expanded(
@@ -302,9 +216,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                   onTap: _openPurchaseReport,
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.person_add_outlined,
@@ -313,9 +225,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                   onTap: _openAddSupplier,
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.assignment_return_outlined,
@@ -324,9 +234,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                   onTap: _openPurchaseReturn,
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.add_shopping_cart_outlined,
@@ -337,24 +245,14 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // =====================================================
-          // Summary Cards
-          // =====================================================
           PurchasesSummaryRow(
             totalPurchases: totalPurchases,
             invoicesCount: invoices.length,
             totalPaid: totalPaid,
             totalRemaining: totalRemaining,
           ),
-
           const SizedBox(height: 20),
-
-          // =====================================================
-          // Invoices Section
-          // =====================================================
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -370,17 +268,11 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
                   searchController: searchController,
                   count: filteredInvoices.length,
                   onFilterSelected: (filter) {
-                    setState(() {
-                      selectedFilter = filter;
-                    });
+                    setState(() => selectedFilter = filter);
                   },
-                  onSearchChanged: (_) {
-                    setState(() {});
-                  },
+                  onSearchChanged: (_) => setState(() {}),
                 ),
-
                 const SizedBox(height: 14),
-
                 _isLoading
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 60),
