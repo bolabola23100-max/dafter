@@ -61,12 +61,21 @@ class SalesService {
         if (customer == null) throw Exception('العميل غير موجود');
       }
 
+      final requestedQuantities = <String, int>{};
       for (final item in sale.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
         if (item.subtotal < 0) throw Exception('سعر أو خصم الصنف غير صحيح');
-        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        requestedQuantities.update(
+          item.productId,
+          (quantity) => quantity + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+
+      for (final entry in requestedQuantities.entries) {
+        final product = await _productRepository.getProductByIdWithExecutor(txn, entry.key);
         if (product == null) throw Exception('المنتج غير موجود');
-        if (product.quantity < item.quantity) {
+        if (product.quantity < entry.value) {
           throw Exception('الكمية مش مكفية من: ${product.name}');
         }
       }
