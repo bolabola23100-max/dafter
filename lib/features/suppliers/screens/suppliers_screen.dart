@@ -20,11 +20,8 @@ class SuppliersScreen extends StatefulWidget {
 
 class _SuppliersScreenState extends State<SuppliersScreen> {
   final SupplierRepository _supplierRepository = SupplierRepository();
-
   String selectedFilter = 'الكل';
-
   List<Supplier> suppliers = [];
-
   bool _isLoading = true;
 
   @override
@@ -33,31 +30,19 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     _loadSuppliers();
   }
 
-  // =========================
-  // Load Suppliers
-  // =========================
-
   Future<void> _loadSuppliers() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) setState(() => _isLoading = true);
 
     try {
       final result = await _supplierRepository.getSuppliers();
-
       if (!mounted) return;
-
       setState(() {
         suppliers = result;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-      });
-
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('حدث خطأ أثناء تحميل الموردين: $e'),
@@ -67,38 +52,15 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     }
   }
 
-  // =========================
-  // Filter
-  // =========================
-
   List<Supplier> get filteredSuppliers {
     if (selectedFilter == 'عليهم مستحقات') {
       return suppliers.where((supplier) => supplier.balance > 0).toList();
     }
-
     if (selectedFilter == 'بدون مستحقات') {
       return suppliers.where((supplier) => supplier.balance <= 0).toList();
     }
-
     return suppliers;
   }
-
-  // =========================
-  // Coming Soon
-  // =========================
-
-  void _showComingSoon(String title) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$title - الشاشة قيد التجهيز'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  // =========================
-  // Build
-  // =========================
 
   @override
   Widget build(BuildContext context) {
@@ -107,9 +69,6 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // =========================================================
-          // Action Buttons
-          // =========================================================
           Row(
             children: [
               Expanded(
@@ -117,14 +76,13 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                   icon: Icons.receipt_long_outlined,
                   label: 'كشف حساب',
                   primary: false,
-                  onTap: () {
-                    Nav.push(context, const SupplierStatementScreen());
+                  onTap: () async {
+                    await Nav.push(context, const SupplierStatementScreen());
+                    await _loadSuppliers();
                   },
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.person_add_outlined,
@@ -132,27 +90,23 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                   primary: false,
                   onTap: () async {
                     await Nav.push(context, const AddSupplierScreen());
-
                     await _loadSuppliers();
                   },
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.payments_outlined,
                   label: 'سداد دفعة',
                   primary: false,
-                  onTap: () {
-                    Nav.push(context, const SupplierPaymentScreen());
+                  onTap: () async {
+                    await Nav.push(context, const SupplierPaymentScreen());
+                    await _loadSuppliers();
                   },
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.shopping_bag_outlined,
@@ -160,26 +114,15 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                   primary: true,
                   onTap: () async {
                     await Nav.push(context, const PurchaseInvoiceScreen());
-
                     await _loadSuppliers();
                   },
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // =========================================================
-          // Summary
-          // =========================================================
           SuppliersSummaryRow(totalSuppliers: suppliers.length),
-
           const SizedBox(height: 20),
-
-          // =========================================================
-          // Suppliers List
-          // =========================================================
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -198,18 +141,18 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                         selectedFilter: selectedFilter,
                         count: filteredSuppliers.length,
                         onFilterSelected: (filter) {
-                          setState(() {
-                            selectedFilter = filter;
-                          });
+                          setState(() => selectedFilter = filter);
                         },
                       ),
-
                       const SizedBox(height: 14),
-
                       SuppliersTable(
                         suppliers: filteredSuppliers,
-                        onSupplierTap: (supplier) {
-                          _showComingSoon('كشف حساب ${supplier.name}');
+                        onSupplierTap: (supplier) async {
+                          await Nav.push(
+                            context,
+                            const SupplierStatementScreen(),
+                          );
+                          await _loadSuppliers();
                         },
                       ),
                     ],

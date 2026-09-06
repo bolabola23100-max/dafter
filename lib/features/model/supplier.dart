@@ -3,6 +3,7 @@ class Supplier {
   String name;
   String? phone;
   String? address;
+  String? notes;
 
   double openingBalance;
   double balance;
@@ -12,6 +13,7 @@ class Supplier {
     required this.name,
     this.phone,
     this.address,
+    this.notes,
     this.openingBalance = 0,
     this.balance = 0,
   });

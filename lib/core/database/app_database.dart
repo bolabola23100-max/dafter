@@ -22,28 +22,43 @@ class AppDatabase {
 
   Future<Database> _initDatabase() async {
     sqfliteFfiInit();
-
     databaseFactory = databaseFactoryFfi;
 
     final databasePath = await getDatabasesPath();
-
     final path = join(databasePath, 'dafter.db');
 
-    return await openDatabase(
+    return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
-  Future<void> _onCreate(Database db, int version) async {
-    // =========================
-    // Categories
-    // =========================
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE ${DatabaseTables.suppliers} ADD COLUMN balance REAL NOT NULL DEFAULT 0',
+      );
 
+      await db.execute(
+        'ALTER TABLE ${DatabaseTables.suppliers} ADD COLUMN notes TEXT',
+      );
+
+      // Existing databases only had opening_balance. Keep existing data
+      // consistent by initializing the new balance from that value.
+      await db.execute('''
+        UPDATE ${DatabaseTables.suppliers}
+        SET balance = opening_balance
+        WHERE balance = 0 AND opening_balance != 0
+      ''');
+    }
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE ${DatabaseTables.categories} (
         id TEXT PRIMARY KEY,
@@ -52,10 +67,6 @@ class AppDatabase {
         updated_at TEXT NOT NULL
       )
     ''');
-
-    // =========================
-    // Products
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.products} (
@@ -69,16 +80,11 @@ class AppDatabase {
         min_quantity INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-
         FOREIGN KEY (category_id)
           REFERENCES ${DatabaseTables.categories}(id)
           ON DELETE SET NULL
       )
     ''');
-
-    // =========================
-    // Suppliers
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.suppliers} (
@@ -87,14 +93,12 @@ class AppDatabase {
         phone TEXT,
         address TEXT,
         opening_balance REAL NOT NULL DEFAULT 0,
+        balance REAL NOT NULL DEFAULT 0,
+        notes TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
     ''');
-
-    // =========================
-    // Customers
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.customers} (
@@ -108,10 +112,6 @@ class AppDatabase {
       )
     ''');
 
-    // =========================
-    // Accounts
-    // =========================
-
     await db.execute('''
       CREATE TABLE ${DatabaseTables.accounts} (
         id TEXT PRIMARY KEY,
@@ -124,10 +124,6 @@ class AppDatabase {
       )
     ''');
 
-    // =========================
-    // Sales
-    // =========================
-
     await db.execute('''
       CREATE TABLE ${DatabaseTables.sales} (
         id TEXT PRIMARY KEY,
@@ -138,16 +134,11 @@ class AppDatabase {
         total REAL NOT NULL DEFAULT 0,
         paid_amount REAL NOT NULL DEFAULT 0,
         notes TEXT,
-
         FOREIGN KEY (customer_id)
           REFERENCES ${DatabaseTables.customers}(id)
           ON DELETE SET NULL
       )
     ''');
-
-    // =========================
-    // Sale Items
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.saleItems} (
@@ -158,19 +149,13 @@ class AppDatabase {
         price REAL NOT NULL,
         discount REAL NOT NULL DEFAULT 0,
         subtotal REAL NOT NULL DEFAULT 0,
-
         FOREIGN KEY (sale_id)
           REFERENCES ${DatabaseTables.sales}(id)
           ON DELETE CASCADE,
-
         FOREIGN KEY (product_id)
           REFERENCES ${DatabaseTables.products}(id)
       )
     ''');
-
-    // =========================
-    // Purchases
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.purchases} (
@@ -182,16 +167,11 @@ class AppDatabase {
         total REAL NOT NULL DEFAULT 0,
         paid_amount REAL NOT NULL DEFAULT 0,
         notes TEXT,
-
         FOREIGN KEY (supplier_id)
           REFERENCES ${DatabaseTables.suppliers}(id)
           ON DELETE SET NULL
       )
     ''');
-
-    // =========================
-    // Purchase Items
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.purchaseItems} (
@@ -202,19 +182,13 @@ class AppDatabase {
         price REAL NOT NULL,
         discount REAL NOT NULL DEFAULT 0,
         subtotal REAL NOT NULL DEFAULT 0,
-
         FOREIGN KEY (purchase_id)
           REFERENCES ${DatabaseTables.purchases}(id)
           ON DELETE CASCADE,
-
         FOREIGN KEY (product_id)
           REFERENCES ${DatabaseTables.products}(id)
       )
     ''');
-
-    // =========================
-    // Payments
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.payments} (
@@ -226,15 +200,10 @@ class AppDatabase {
         amount REAL NOT NULL,
         date TEXT NOT NULL,
         notes TEXT,
-
         FOREIGN KEY (account_id)
           REFERENCES ${DatabaseTables.accounts}(id)
       )
     ''');
-
-    // =========================
-    // Expenses
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.expenses} (
@@ -244,15 +213,10 @@ class AppDatabase {
         amount REAL NOT NULL,
         date TEXT NOT NULL,
         notes TEXT,
-
         FOREIGN KEY (account_id)
           REFERENCES ${DatabaseTables.accounts}(id)
       )
     ''');
-
-    // =========================
-    // Stock Movements
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.stockMovements} (
@@ -263,15 +227,10 @@ class AppDatabase {
         date TEXT NOT NULL,
         reference_id TEXT,
         notes TEXT,
-
         FOREIGN KEY (product_id)
           REFERENCES ${DatabaseTables.products}(id)
       )
     ''');
-
-    // =========================
-    // Account Transactions
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.accountTransactions} (
@@ -283,15 +242,10 @@ class AppDatabase {
         date TEXT NOT NULL,
         reference_id TEXT,
         description TEXT,
-
         FOREIGN KEY (account_id)
           REFERENCES ${DatabaseTables.accounts}(id)
       )
     ''');
-
-    // =========================
-    // Transfers
-    // =========================
 
     await db.execute('''
       CREATE TABLE ${DatabaseTables.transfers} (
@@ -301,18 +255,12 @@ class AppDatabase {
         amount REAL NOT NULL,
         date TEXT NOT NULL,
         notes TEXT,
-
         FOREIGN KEY (from_account_id)
           REFERENCES ${DatabaseTables.accounts}(id),
-
         FOREIGN KEY (to_account_id)
           REFERENCES ${DatabaseTables.accounts}(id)
       )
     ''');
-
-    // =========================
-    // Indexes
-    // =========================
 
     await _createIndexes(db);
   }
