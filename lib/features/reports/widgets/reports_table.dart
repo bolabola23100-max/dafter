@@ -13,6 +13,7 @@ class ReportsTable extends StatelessWidget {
   final int purchaseReturnsCount;
   final double purchaseReturnsTotal;
   final double stockValue;
+  final String reportType;
 
   const ReportsTable({
     super.key,
@@ -27,13 +28,14 @@ class ReportsTable extends StatelessWidget {
     required this.purchaseReturnsCount,
     required this.purchaseReturnsTotal,
     required this.stockValue,
+    required this.reportType,
   });
 
   String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
 
   @override
   Widget build(BuildContext context) {
-    final rows = [
+    final allRows = <ReportRow>[
       ReportRow(
         icon: Icons.shopping_cart_outlined,
         title: 'المبيعات',
@@ -83,6 +85,28 @@ class ReportsTable extends StatelessWidget {
         status: 'محدث',
       ),
     ];
+
+    final rows = switch (reportType) {
+      'المبيعات' => allRows.where((row) => row.title == 'المبيعات' || row.title == 'مرتجعات البيع').toList(),
+      'المشتريات' => allRows.where((row) => row.title == 'المشتريات' || row.title == 'مرتجعات الشراء').toList(),
+      'المصروفات' => allRows.where((row) => row.title == 'المصروفات').toList(),
+      'المخزون' => allRows.where((row) => row.title == 'المخزون').toList(),
+      'صافي الحركة' => <ReportRow>[
+          ReportRow(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'صافي الحركة',
+            subtitle: 'المبيعات - المشتريات - المصروفات بعد المرتجعات',
+            operations: '-',
+            amount: _money(
+              (salesTotal - salesReturnsTotal) -
+                  (purchasesTotal - purchaseReturnsTotal) -
+                  expensesTotal,
+            ),
+            status: 'محدث',
+          ),
+        ],
+      _ => allRows,
+    };
 
     return Container(
       decoration: BoxDecoration(
