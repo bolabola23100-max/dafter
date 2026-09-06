@@ -5,10 +5,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'app_database.dart';
 
 /// Watches a second SQLite connection for committed database changes.
-///
-/// The DatabaseFactory API receives open options through OpenDatabaseOptions.
-/// A separate connection is required because SQLite's data_version does not
-/// change for commits made through the same connection that reads it.
 class AppDatabaseWatcher {
   AppDatabaseWatcher._();
 
@@ -23,9 +19,7 @@ class AppDatabaseWatcher {
   final List<VoidCallback> _listeners = [];
 
   void addListener(VoidCallback listener) {
-    if (!_listeners.contains(listener)) {
-      _listeners.add(listener);
-    }
+    if (!_listeners.contains(listener)) _listeners.add(listener);
   }
 
   void removeListener(VoidCallback listener) {
@@ -64,10 +58,24 @@ class AppDatabaseWatcher {
     }
   }
 
+  /// Closes only the watcher connection while keeping listeners registered.
+  Future<void> stopConnection() async {
+    _timer?.cancel();
+    _timer = null;
+    final database = _watchDatabase;
+    _watchDatabase = null;
+    if (database != null) await database.close();
+  }
+
+  void notifyListeners() {
+    for (final listener in List<VoidCallback>.from(_listeners)) {
+      listener();
+    }
+  }
+
   Future<int?> _readVersion() async {
     final database = _watchDatabase;
     if (database == null) return null;
-
     try {
       final rows = await database.rawQuery('PRAGMA data_version');
       if (rows.isEmpty) return null;
@@ -80,21 +88,16 @@ class AppDatabaseWatcher {
   Future<void> _checkForChanges() async {
     if (_checking) return;
     _checking = true;
-
     try {
       final currentVersion = await _readVersion();
       if (currentVersion == null) return;
-
       if (_lastVersion == null) {
         _lastVersion = currentVersion;
         return;
       }
-
       if (currentVersion != _lastVersion) {
         _lastVersion = currentVersion;
-        for (final listener in List<VoidCallback>.from(_listeners)) {
-          listener();
-        }
+        notifyListeners();
       }
     } finally {
       _checking = false;
@@ -102,15 +105,8 @@ class AppDatabaseWatcher {
   }
 
   Future<void> dispose() async {
-    _timer?.cancel();
-    _timer = null;
+    await stopConnection();
     _listeners.clear();
-
-    final database = _watchDatabase;
-    _watchDatabase = null;
-    if (database != null) {
-      await database.close();
-    }
   }
 }
 
