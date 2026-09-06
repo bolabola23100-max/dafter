@@ -1,16 +1,16 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
-import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
+import 'package:dafter/features/model/purchase_item.dart';
 import 'package:dafter/features/model/purchase_return.dart';
 import 'package:dafter/features/model/stock_movement.dart';
 import 'package:dafter/features/purchases/repo/purchase_repository.dart';
 import 'package:dafter/features/purchases/repo/purchase_return_repository.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class PurchaseReturnService {
   final AppDatabase _database;
@@ -49,7 +49,9 @@ class PurchaseReturnService {
     DateTime? date,
   }) async {
     if (items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
-    if (refundedAmount < 0) throw Exception('مبلغ الفلوس الراجعة مينفعش يكون سالب');
+    if (refundedAmount < 0) {
+      throw Exception('مبلغ الفلوس الراجعة مينفعش يكون سالب');
+    }
 
     final purchase = await _purchaseRepository.getPurchaseById(purchaseId);
     if (purchase == null) throw Exception('فاتورة الشراء مش موجودة');
@@ -59,7 +61,6 @@ class PurchaseReturnService {
     if (refundedAmount > total) {
       throw Exception('الفلوس الراجعة مينفعش تكون أكتر من قيمة المرتجع');
     }
-
     if (refundedAmount > 0 && refundAccountId == null) {
       throw Exception('اختار الحساب اللي هتنزل فيه فلوس المورد');
     }
@@ -73,33 +74,37 @@ class PurchaseReturnService {
       if (supplier == null) throw Exception('المورد مش موجود');
 
       final purchaseItems = await _purchaseRepository.getPurchaseItems(purchaseId);
-      final existingReturns =
-          await _returnRepository.getReturnsByPurchase(purchaseId);
+      final oldReturnRows = await txn.query(
+        DatabaseTables.purchaseReturnItems,
+        columns: ['purchase_item_id', 'quantity'],
+        where: 'return_id IN (SELECT id FROM ${DatabaseTables.purchaseReturns} WHERE purchase_id = ?)',
+        whereArgs: [purchaseId],
+      );
+
+      final returnedByPurchaseItem = <String, int>{};
+      for (final row in oldReturnRows) {
+        final id = row['purchase_item_id'] as String;
+        returnedByPurchaseItem[id] =
+            (returnedByPurchaseItem[id] ?? 0) + (row['quantity'] as int);
+      }
+
+      final purchaseItemById = <String, PurchaseItem>{
+        for (final item in purchaseItems) item.id: item,
+      };
 
       for (final item in items) {
-        final original = purchaseItems.cast<dynamic>().firstWhere(
-          (value) => value.id == item.purchaseItemId,
-          orElse: () => null,
-        );
+        final original = purchaseItemById[item.purchaseItemId];
         if (original == null) {
           throw Exception('في صنف من المرتجع مش موجود في الفاتورة');
         }
         if (item.productId != original.productId) {
           throw Exception('بيانات الصنف مش متطابقة مع الفاتورة');
         }
-
-        var alreadyReturned = 0;
-        for (final oldReturn in existingReturns) {
-          for (final oldItem in oldReturn.items) {
-            if (oldItem.purchaseItemId == item.purchaseItemId) {
-              alreadyReturned += oldItem.quantity;
-            }
-          }
-        }
-
         if (item.quantity <= 0) {
           throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
         }
+
+        final alreadyReturned = returnedByPurchaseItem[item.purchaseItemId] ?? 0;
         if (alreadyReturned + item.quantity > original.quantity) {
           throw Exception('مينفعش ترجع كمية أكبر من اللي اتشرت');
         }
@@ -119,7 +124,7 @@ class PurchaseReturnService {
           product.quantity - item.quantity,
         );
 
-        await txn.insert('stock_movements', {
+        await txn.insert(DatabaseTables.stockMovements, {
           'id': _newId(),
           'product_id': item.productId,
           'type': StockMovementType.purchaseReturn.name,
@@ -133,7 +138,7 @@ class PurchaseReturnService {
       final creditToSupplier = total - refundedAmount;
       if (creditToSupplier > supplier.balance) {
         throw Exception(
-          'رصيد المورد الحالي مش مكفي لتسوية المرتجع. اختار فلوس راجعة من المورد بدل التسوية على الحساب.',
+          'رصيد المورد الحالي مش مكفي لتسوية المرتجع. زوّد مبلغ الفلوس الراجعة من المورد.',
         );
       }
 
@@ -151,17 +156,18 @@ class PurchaseReturnService {
           )
           .toList();
 
-      final purchaseReturn = PurchaseReturn(
-        id: returnId,
-        purchaseId: purchaseId,
-        supplierId: supplier.id,
-        date: date ?? DateTime.now(),
-        items: returnItems,
-        refundedAmount: refundedAmount,
-        notes: notes,
+      await _returnRepository.addReturnWithExecutor(
+        txn,
+        PurchaseReturn(
+          id: returnId,
+          purchaseId: purchaseId,
+          supplierId: supplier.id,
+          date: date ?? DateTime.now(),
+          items: returnItems,
+          refundedAmount: refundedAmount,
+          notes: notes,
+        ),
       );
-
-      await _returnRepository.addReturnWithExecutor(txn, purchaseReturn);
 
       if (creditToSupplier > 0) {
         await _supplierRepository.updateBalanceWithExecutor(
@@ -176,10 +182,12 @@ class PurchaseReturnService {
           txn,
           refundAccountId!,
         );
-        if (account == null) throw Exception('الحساب اللي هتدخل فيه الفلوس مش موجود');
+        if (account == null) {
+          throw Exception('الحساب اللي هتدخل فيه الفلوس مش موجود');
+        }
 
         final paymentId = _newId();
-        await txn.insert('payments', {
+        await txn.insert(DatabaseTables.payments, {
           'id': paymentId,
           'type': PaymentType.receipt.name,
           'person_type': 'supplier',
