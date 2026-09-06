@@ -56,6 +56,7 @@ class AppDatabaseWatcher {
       _starting = false;
     }
   }
+  
 
   /// Closes only the watcher connection while keeping listeners registered.
   Future<void> stopConnection() async {
