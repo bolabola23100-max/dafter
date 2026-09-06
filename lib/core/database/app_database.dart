@@ -28,6 +28,15 @@ class AppDatabase {
     );
   }
 
+  /// Closes the current connection so a backup can be restored safely.
+  Future<void> close() async {
+    final database = _database;
+    _database = null;
+    if (database != null) {
+      await database.close();
+    }
+  }
+
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute('ALTER TABLE ${DatabaseTables.suppliers} ADD COLUMN balance REAL NOT NULL DEFAULT 0');
