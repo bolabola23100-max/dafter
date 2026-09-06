@@ -6,10 +6,9 @@ import 'app_database.dart';
 
 /// Watches a second SQLite connection for committed database changes.
 ///
-/// This keeps the desktop UI synchronized even when the write happens from
-/// another screen/route. SQLite's data_version is intentionally checked from
-/// a separate connection because it does not change for commits made by the
-/// same connection.
+/// The DatabaseFactory API receives open options through OpenDatabaseOptions.
+/// A separate connection is required because SQLite's data_version does not
+/// change for commits made through the same connection that reads it.
 class AppDatabaseWatcher {
   AppDatabaseWatcher._();
 
@@ -19,6 +18,7 @@ class AppDatabaseWatcher {
   Timer? _timer;
   int? _lastVersion;
   bool _starting = false;
+  bool _checking = false;
 
   final List<VoidCallback> _listeners = [];
 
@@ -46,12 +46,12 @@ class AppDatabaseWatcher {
 
       if (databasePath == null || databasePath.isEmpty) return;
 
-      // sqflite_common_ffi does not expose a readOnly named parameter on
-      // openDatabase. A separate connection is enough for PRAGMA data_version
-      // and singleInstance:false prevents it from reusing the main connection.
       _watchDatabase = await databaseFactoryFfi.openDatabase(
         databasePath,
-        singleInstance: false,
+        options: OpenDatabaseOptions(
+          readOnly: true,
+          singleInstance: false,
+        ),
       );
 
       _lastVersion = await _readVersion();
@@ -78,19 +78,26 @@ class AppDatabaseWatcher {
   }
 
   Future<void> _checkForChanges() async {
-    final currentVersion = await _readVersion();
-    if (currentVersion == null) return;
+    if (_checking) return;
+    _checking = true;
 
-    if (_lastVersion == null) {
-      _lastVersion = currentVersion;
-      return;
-    }
+    try {
+      final currentVersion = await _readVersion();
+      if (currentVersion == null) return;
 
-    if (currentVersion != _lastVersion) {
-      _lastVersion = currentVersion;
-      for (final listener in List<VoidCallback>.from(_listeners)) {
-        listener();
+      if (_lastVersion == null) {
+        _lastVersion = currentVersion;
+        return;
       }
+
+      if (currentVersion != _lastVersion) {
+        _lastVersion = currentVersion;
+        for (final listener in List<VoidCallback>.from(_listeners)) {
+          listener();
+        }
+      }
+    } finally {
+      _checking = false;
     }
   }
 
