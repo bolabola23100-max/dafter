@@ -16,6 +16,7 @@ dependencies:
   printing: ^5.14.3
   file_selector: ^1.1.0
   excel: ^4.0.6
+  window_manager: ^0.5.2
 
 dev_dependencies:
   flutter_test:
