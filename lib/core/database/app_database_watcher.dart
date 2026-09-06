@@ -46,9 +46,11 @@ class AppDatabaseWatcher {
 
       if (databasePath == null || databasePath.isEmpty) return;
 
+      // sqflite_common_ffi does not expose a readOnly named parameter on
+      // openDatabase. A separate connection is enough for PRAGMA data_version
+      // and singleInstance:false prevents it from reusing the main connection.
       _watchDatabase = await databaseFactoryFfi.openDatabase(
         databasePath,
-        readOnly: true,
         singleInstance: false,
       );
 
