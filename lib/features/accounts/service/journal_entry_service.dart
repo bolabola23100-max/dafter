@@ -2,7 +2,6 @@ import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class JournalEntryService {
   final AppDatabase _database;
