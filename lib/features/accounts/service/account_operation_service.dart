@@ -2,12 +2,12 @@ import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class AccountOperationService {
   final AppDatabase _database;
 
-  AccountOperationService({AppDatabase? database}) : _database = database ?? AppDatabase.instance;
+  AccountOperationService({AppDatabase? database})
+      : _database = database ?? AppDatabase.instance;
 
   Future<void> savePaymentOrReceipt({
     required PaymentType type,
@@ -37,7 +37,9 @@ class AccountOperationService {
 
       final now = DateTime.now();
       final id = now.microsecondsSinceEpoch.toString();
-      final newBalance = type == PaymentType.receipt ? balance + amount : balance - amount;
+      final newBalance = type == PaymentType.receipt
+          ? balance + amount
+          : balance - amount;
 
       await txn.insert(DatabaseTables.payments, {
         'id': id,
@@ -53,12 +55,16 @@ class AccountOperationService {
       await txn.insert(DatabaseTables.accountTransactions, {
         'id': 'tx_$id',
         'account_id': accountId,
-        'type': type == PaymentType.receipt ? TransactionType.receipt.name : TransactionType.payment.name,
+        'type': type == PaymentType.receipt
+            ? TransactionType.receipt.name
+            : TransactionType.payment.name,
         'amount': amount,
         'is_debit': type == PaymentType.payment ? 1 : 0,
         'date': now.toIso8601String(),
         'reference_id': id,
-        'description': personName?.trim().isNotEmpty == true ? personName!.trim() : null,
+        'description': personName?.trim().isNotEmpty == true
+            ? personName!.trim()
+            : null,
       });
 
       await txn.update(
