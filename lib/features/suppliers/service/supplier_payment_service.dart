@@ -5,7 +5,6 @@ import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class SupplierPaymentService {
   final AppDatabase _database;
@@ -20,12 +19,11 @@ class SupplierPaymentService {
     AccountRepository? accountRepository,
     PaymentRepository? paymentRepository,
     AccountTransactionRepository? accountTransactionRepository,
-  })  : _database = database ?? AppDatabase.instance,
-        _supplierRepository = supplierRepository ?? SupplierRepository(),
-        _accountRepository = accountRepository ?? AccountRepository(),
-        _paymentRepository = paymentRepository ?? PaymentRepository(),
-        _accountTransactionRepository =
-            accountTransactionRepository ?? AccountTransactionRepository();
+  }) : _database = database ?? AppDatabase.instance,
+       _supplierRepository = supplierRepository ?? SupplierRepository(),
+       _accountRepository = accountRepository ?? AccountRepository(),
+       _paymentRepository = paymentRepository ?? PaymentRepository(),
+       _accountTransactionRepository = accountTransactionRepository ?? AccountTransactionRepository();
 
   Future<void> paySupplier({
     required String supplierId,
@@ -42,20 +40,14 @@ class SupplierPaymentService {
     final paymentDate = date ?? DateTime.now();
 
     await db.transaction((txn) async {
-      final supplier = await _supplierRepository.getSupplierByIdWithExecutor(
-        txn,
-        supplierId,
-      );
+      final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, supplierId);
       if (supplier == null) throw Exception('المورد غير موجود');
 
       if (amount > supplier.balance) {
         throw Exception('مبلغ الدفعة أكبر من المستحق على المورد');
       }
 
-      final account = await _accountRepository.getAccountByIdWithExecutor(
-        txn,
-        accountId,
-      );
+      final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId);
       if (account == null) throw Exception('الحساب غير موجود');
 
       if (amount > account.balance) {
