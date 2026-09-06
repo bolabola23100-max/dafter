@@ -16,12 +16,18 @@ class ReportExportService {
   }) async {
     final location = await getSaveLocation(
       suggestedName: 'تقرير_دفتر.pdf',
-      acceptedTypeGroups: const [XTypeGroup(label: 'PDF', extensions: ['pdf'])],
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'PDF', extensions: ['pdf']),
+      ],
     );
     if (location == null) return false;
 
     final bytes = await _buildPdf(summary, period, report);
-    await XFile.fromData(bytes, name: 'تقرير_دفتر.pdf', mimeType: 'application/pdf').saveTo(location.path);
+    await XFile.fromData(
+      bytes,
+      name: 'تقرير_دفتر.pdf',
+      mimeType: 'application/pdf',
+    ).saveTo(location.path);
     return true;
   }
 
@@ -32,7 +38,9 @@ class ReportExportService {
   }) async {
     final location = await getSaveLocation(
       suggestedName: 'تقرير_دفتر.xlsx',
-      acceptedTypeGroups: const [XTypeGroup(label: 'Excel', extensions: ['xlsx'])],
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+      ],
     );
     if (location == null) return false;
 
@@ -42,14 +50,38 @@ class ReportExportService {
     sheet.appendRow([TextCellValue('الفترة'), TextCellValue(period)]);
     sheet.appendRow([TextCellValue('نوع التقرير'), TextCellValue(report)]);
     sheet.appendRow([TextCellValue('')]);
-    sheet.appendRow([TextCellValue('البند'), TextCellValue('العدد'), TextCellValue('القيمة')]);
+    sheet.appendRow([
+      TextCellValue('البند'),
+      TextCellValue('العدد'),
+      TextCellValue('القيمة'),
+    ]);
     _appendExcelRow(sheet, 'المبيعات', summary.salesCount, summary.salesTotal);
-    _appendExcelRow(sheet, 'مرتجعات البيع', summary.salesReturnsCount, summary.salesReturnsTotal);
+    _appendExcelRow(
+      sheet,
+      'مرتجعات البيع',
+      summary.salesReturnsCount,
+      summary.salesReturnsTotal,
+    );
     _appendExcelRow(sheet, 'صافي المبيعات', null, summary.netSales);
-    _appendExcelRow(sheet, 'المشتريات', summary.purchasesCount, summary.purchasesTotal);
-    _appendExcelRow(sheet, 'مرتجعات الشراء', summary.purchaseReturnsCount, summary.purchaseReturnsTotal);
+    _appendExcelRow(
+      sheet,
+      'المشتريات',
+      summary.purchasesCount,
+      summary.purchasesTotal,
+    );
+    _appendExcelRow(
+      sheet,
+      'مرتجعات الشراء',
+      summary.purchaseReturnsCount,
+      summary.purchaseReturnsTotal,
+    );
     _appendExcelRow(sheet, 'صافي المشتريات', null, summary.netPurchases);
-    _appendExcelRow(sheet, 'المصروفات', summary.expensesCount, summary.expensesTotal);
+    _appendExcelRow(
+      sheet,
+      'المصروفات',
+      summary.expensesCount,
+      summary.expensesTotal,
+    );
     _appendExcelRow(sheet, 'الصافي', null, summary.net);
     _appendExcelRow(sheet, 'قيمة المخزون', null, summary.stockValue);
     _appendExcelRow(sheet, 'المنتجات', summary.productsCount, null);
@@ -70,25 +102,37 @@ class ReportExportService {
     ]);
   }
 
-  Future<Uint8List> _buildPdf(ReportSummary summary, String period, String report) async {
+  Future<Uint8List> _buildPdf(
+    ReportSummary summary,
+    String period,
+    String report,
+  ) async {
     final document = pw.Document();
     pw.Font? regular;
     pw.Font? bold;
 
-    const fontPaths = ['C:\\Windows\\Fonts\\arial.ttf', 'C:\\Windows\\Fonts\\tahoma.ttf'];
-    const boldPaths = ['C:\\Windows\\Fonts\\arialbd.ttf', 'C:\\Windows\\Fonts\\tahomabd.ttf'];
+    const fontPaths = [
+      'C:\\Windows\\Fonts\\arial.ttf',
+      'C:\\Windows\\Fonts\\tahoma.ttf',
+    ];
+    const boldPaths = [
+      'C:\\Windows\\Fonts\\arialbd.ttf',
+      'C:\\Windows\\Fonts\\tahomabd.ttf',
+    ];
 
     for (final path in fontPaths) {
       final file = File(path);
       if (await file.exists()) {
-        regular = pw.Font.ttf(await file.readAsBytes());
+        final bytes = await file.readAsBytes();
+        regular = pw.Font.ttf(ByteData.view(bytes.buffer));
         break;
       }
     }
     for (final path in boldPaths) {
       final file = File(path);
       if (await file.exists()) {
-        bold = pw.Font.ttf(await file.readAsBytes());
+        final bytes = await file.readAsBytes();
+        bold = pw.Font.ttf(ByteData.view(bytes.buffer));
         break;
       }
     }
@@ -103,7 +147,13 @@ class ReportExportService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
-                pw.Text('تقرير دفتر', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                pw.Text(
+                  'تقرير دفتر',
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
                 pw.SizedBox(height: 8),
                 pw.Text('الفترة: $period'),
                 pw.Text('نوع التقرير: $report'),
@@ -126,7 +176,11 @@ class ReportExportService {
       ['مرتجعات البيع', '${s.salesReturnsCount}', _money(s.salesReturnsTotal)],
       ['صافي المبيعات', '', _money(s.netSales)],
       ['المشتريات', '${s.purchasesCount}', _money(s.purchasesTotal)],
-      ['مرتجعات الشراء', '${s.purchaseReturnsCount}', _money(s.purchaseReturnsTotal)],
+      [
+        'مرتجعات الشراء',
+        '${s.purchaseReturnsCount}',
+        _money(s.purchaseReturnsTotal),
+      ],
       ['صافي المشتريات', '', _money(s.netPurchases)],
       ['المصروفات', '${s.expensesCount}', _money(s.expensesTotal)],
       ['الصافي', '', _money(s.net)],

@@ -3,7 +3,6 @@ import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/model/account.dart';
 import 'package:dafter/features/model/purchase.dart';
-import 'package:dafter/features/model/purchase_item.dart';
 import 'package:dafter/features/model/purchase_return.dart';
 import 'package:dafter/features/purchases/repo/purchase_repository.dart';
 import 'package:dafter/features/purchases/service/purchase_return_service.dart';
@@ -85,14 +84,18 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
 
       String? name;
       if (purchase.supplierId != null) {
-        final supplier = await _supplierRepository.getSupplierById(purchase.supplierId!);
+        final supplier = await _supplierRepository.getSupplierById(
+          purchase.supplierId!,
+        );
         name = supplier?.name;
       }
 
       final returned = await _getAlreadyReturnedQuantities(purchase.id);
       final loadedItems = <ReturnItem>[];
       for (final purchaseItem in purchase.items) {
-        final product = await _productRepository.getProductById(purchaseItem.productId);
+        final product = await _productRepository.getProductById(
+          purchaseItem.productId,
+        );
         if (product == null) continue;
         final already = returned[purchaseItem.id] ?? 0;
         final remaining = purchaseItem.quantity - already;
@@ -124,7 +127,9 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
     }
   }
 
-  Future<Map<String, int>> _getAlreadyReturnedQuantities(String purchaseId) async {
+  Future<Map<String, int>> _getAlreadyReturnedQuantities(
+    String purchaseId,
+  ) async {
     // The service validates the final quantity again. Here we only hide fully returned items.
     // Keeping this screen simple avoids duplicating return accounting logic.
     return {};
@@ -315,66 +320,66 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
               ),
             )
           : items.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(30),
-                  child: Text(
-                    'كل أصناف الفاتورة دي اتعمل لها مرتجع قبل كده',
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : Column(
-                  children: items.map((item) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              item.name,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text('${item.price.toStringAsFixed(2)} جنيه'),
-                          ),
-                          SizedBox(
-                            width: 130,
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  onPressed: item.quantity <= 0
-                                      ? null
-                                      : () => _setQuantity(item, item.quantity - 1),
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    '${item.quantity}',
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: item.quantity >= item.maxQuantity
-                                      ? null
-                                      : () => _setQuantity(item, item.quantity + 1),
-                                  icon: const Icon(Icons.add_circle_outline),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            width: 120,
-                            child: Text(
-                              '${item.total.toStringAsFixed(2)} جنيه',
-                              textAlign: TextAlign.end,
-                            ),
-                          ),
-                        ],
+          ? const Padding(
+              padding: EdgeInsets.all(30),
+              child: Text(
+                'كل أصناف الفاتورة دي اتعمل لها مرتجع قبل كده',
+                textAlign: TextAlign.center,
+              ),
+            )
+          : Column(
+              children: items.map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    );
-                  }).toList(),
-                ),
+                      Expanded(
+                        child: Text('${item.price.toStringAsFixed(2)} جنيه'),
+                      ),
+                      SizedBox(
+                        width: 130,
+                        child: Row(
+                          children: [
+                            IconButton(
+                              onPressed: item.quantity <= 0
+                                  ? null
+                                  : () => _setQuantity(item, item.quantity - 1),
+                              icon: const Icon(Icons.remove_circle_outline),
+                            ),
+                            Expanded(
+                              child: Text(
+                                '${item.quantity}',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: item.quantity >= item.maxQuantity
+                                  ? null
+                                  : () => _setQuantity(item, item.quantity + 1),
+                              icon: const Icon(Icons.add_circle_outline),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          '${item.total.toStringAsFixed(2)} جنيه',
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
     );
   }
 
@@ -407,7 +412,9 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                   .map(
                     (account) => DropdownMenuItem<Account>(
                       value: account,
-                      child: Text('${account.name} - ${account.balance.toStringAsFixed(2)} جنيه'),
+                      child: Text(
+                        '${account.name} - ${account.balance.toStringAsFixed(2)} جنيه',
+                      ),
                     ),
                   )
                   .toList(),
