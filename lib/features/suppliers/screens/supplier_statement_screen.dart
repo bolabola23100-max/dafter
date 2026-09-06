@@ -6,11 +6,12 @@ import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
 import 'package:flutter/material.dart';
 
 class SupplierStatementScreen extends StatefulWidget {
-  const SupplierStatementScreen({super.key});
+  final String? supplierId;
+
+  const SupplierStatementScreen({super.key, this.supplierId});
 
   @override
-  State<SupplierStatementScreen> createState() =>
-      _SupplierStatementScreenState();
+  State<SupplierStatementScreen> createState() => _SupplierStatementScreenState();
 }
 
 class _SupplierStatementScreenState extends State<SupplierStatementScreen> {
@@ -26,6 +27,7 @@ class _SupplierStatementScreenState extends State<SupplierStatementScreen> {
   @override
   void initState() {
     super.initState();
+    selectedSupplierId = widget.supplierId;
     _loadSuppliers();
   }
 
@@ -36,345 +38,174 @@ class _SupplierStatementScreenState extends State<SupplierStatementScreen> {
       setState(() {
         suppliers = result;
         _isLoading = false;
+        if (selectedSupplierId != null && !result.any((s) => s.id == selectedSupplierId)) {
+          selectedSupplierId = null;
+        }
       });
-    } catch (e) {
+      if (selectedSupplierId != null) await _loadStatement(selectedSupplierId!);
+    } catch (_) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showMessage('حدث خطأ أثناء تحميل الموردين: $e');
+      _showMessage('حصلت مشكلة وإحنا بنجيب الموردين');
+    }
+  }
+
+  Future<void> _loadStatement(String id) async {
+    setState(() {
+      purchases = [];
+      payments = [];
+      _isLoading = true;
+    });
+    try {
+      final result = await Future.wait([
+        _purchaseRepository.getPurchasesBySupplier(id),
+        _supplierRepository.getSupplierPayments(id),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        purchases = result[0] as List<Purchase>;
+        payments = result[1] as List<Payment>;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showMessage('حصلت مشكلة وإحنا بنجيب كشف الحساب');
     }
   }
 
   Future<void> _selectSupplier(String? id) async {
-    setState(() {
-      selectedSupplierId = id;
-      purchases = [];
-      payments = [];
-      _isLoading = id != null;
-    });
-
-    if (id == null) return;
-
-    try {
-      final loadedPurchases = await _purchaseRepository.getPurchasesBySupplier(id);
-      final loadedPayments = await _supplierRepository.getSupplierPayments(id);
-
-      if (!mounted) return;
-      setState(() {
-        purchases = loadedPurchases;
-        payments = loadedPayments;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showMessage('حدث خطأ أثناء تحميل كشف الحساب: $e');
-    }
+    setState(() => selectedSupplierId = id);
+    if (id != null) await _loadStatement(id);
   }
 
-  Supplier? get selectedSupplier {
-    for (final supplier in suppliers) {
-      if (supplier.id == selectedSupplierId) return supplier;
-    }
-    return null;
-  }
-
-  double get totalPurchases =>
-      purchases.fold(0, (sum, purchase) => sum + purchase.total);
-
-  double get totalPayments =>
-      payments.fold(0, (sum, payment) => sum + payment.amount);
-
+  Supplier? get selectedSupplier => suppliers.where((s) => s.id == selectedSupplierId).firstOrNull;
+  double get totalPurchases => purchases.fold(0, (sum, p) => sum + p.total);
+  double get totalPayments => payments.fold(0, (sum, p) => sum + p.amount);
   double get openingBalance => selectedSupplier?.openingBalance ?? 0;
-
   double get balance => selectedSupplier?.balance ?? 0;
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _date(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-  }
+  String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
+  String _date(DateTime date) => '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8F9),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'كشف حساب المورد',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+      appBar: AppBar(title: const Text('كشف حساب المورد')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            _selector(),
+            const SizedBox(height: 18),
+            if (selectedSupplierId == null)
+              _empty()
+            else ...[
+              _summary(),
+              const SizedBox(height: 18),
+              _transactions(),
+            ],
+          ],
         ),
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      body: _isLoading && suppliers.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  _buildSupplierSelector(),
-                  const SizedBox(height: 18),
-                  if (selectedSupplierId != null) ...[
-                    _buildSummary(),
-                    const SizedBox(height: 18),
-                    _buildTransactions(),
-                  ] else
-                    _emptyState(),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildSupplierSelector() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _boxDecoration(),
-      child: Row(
-        children: [
-          const Icon(Icons.store_outlined, color: Color(0xFF0E4C4C)),
-          const SizedBox(width: 12),
-          const Text('المورد:', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(width: 15),
-          SizedBox(
-            width: 360,
-            child: DropdownButtonFormField<String>(
-              initialValue: selectedSupplierId,
-              hint: const Text('اختر المورد'),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(9),
-                ),
-              ),
-              items: suppliers
-                  .map(
-                    (supplier) => DropdownMenuItem<String>(
-                      value: supplier.id,
-                      child: Text(supplier.name),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _selectSupplier,
-            ),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildSummary() {
-    return Row(
+  Widget _selector() => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: _box(),
+    child: Row(
       children: [
-        Expanded(
-          child: _Summary(
-            title: 'الرصيد الافتتاحي',
-            value: '${openingBalance.toStringAsFixed(2)} ج.م',
-            icon: Icons.account_balance_wallet_outlined,
-          ),
-        ),
+        const Icon(Icons.store_outlined),
+        const SizedBox(width: 12),
+        const Text('المورد'),
         const SizedBox(width: 15),
-        Expanded(
-          child: _Summary(
-            title: 'إجمالي المشتريات',
-            value: '${totalPurchases.toStringAsFixed(2)} ج.م',
-            icon: Icons.shopping_bag_outlined,
-          ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: _Summary(
-            title: 'إجمالي المدفوع',
-            value: '${totalPayments.toStringAsFixed(2)} ج.م',
-            icon: Icons.payments_outlined,
-          ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: _Summary(
-            title: 'المستحق حاليًا',
-            value: '${balance.toStringAsFixed(2)} ج.م',
-            icon: Icons.account_balance_wallet_outlined,
+        SizedBox(
+          width: 360,
+          child: DropdownButtonFormField<String>(
+            initialValue: selectedSupplierId,
+            hint: const Text('اختار المورد'),
+            items: suppliers.map((s) => DropdownMenuItem(value: s.id, child: Text(s.name))).toList(),
+            onChanged: _selectSupplier,
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
 
-  Widget _buildTransactions() {
+  Widget _summary() => Row(
+    children: [
+      Expanded(child: _Summary(title: 'الرصيد الأول', value: _money(openingBalance), icon: Icons.account_balance_wallet_outlined)),
+      const SizedBox(width: 12),
+      Expanded(child: _Summary(title: 'المشتريات', value: _money(totalPurchases), icon: Icons.shopping_bag_outlined)),
+      const SizedBox(width: 12),
+      Expanded(child: _Summary(title: 'اللي اتدفع', value: _money(totalPayments), icon: Icons.payments_outlined)),
+      const SizedBox(width: 12),
+      Expanded(child: _Summary(title: 'له عندنا دلوقتي', value: _money(balance), icon: Icons.account_balance_wallet_outlined)),
+    ],
+  );
+
+  Widget _transactions() {
     final rows = <_Transaction>[];
-
     for (final purchase in purchases) {
-      rows.add(
-        _Transaction(
-          date: purchase.date,
-          description: 'فاتورة شراء #${purchase.id}',
-          debit: purchase.total,
-          credit: 0,
-        ),
-      );
+      rows.add(_Transaction(date: purchase.date, description: 'فاتورة شراء #${purchase.id}', debit: purchase.total, credit: 0));
     }
-
     for (final payment in payments) {
-      rows.add(
-        _Transaction(
-          date: payment.date,
-          description: payment.notes?.isNotEmpty == true
-              ? payment.notes!
-              : 'سداد دفعة',
-          debit: 0,
-          credit: payment.amount,
-        ),
-      );
+      rows.add(_Transaction(date: payment.date, description: payment.notes?.isNotEmpty == true ? payment.notes! : 'سداد دفعة', debit: 0, credit: payment.amount));
     }
-
-    if (openingBalance > 0) {
-      rows.add(
-        _Transaction(
-          date: selectedSupplier == null
-              ? DateTime.now()
-              : DateTime.now(),
-          description: 'الرصيد الافتتاحي',
-          debit: openingBalance,
-          credit: 0,
-        ),
-      );
-    }
-
     rows.sort((a, b) => b.date.compareTo(a.date));
 
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: _boxDecoration(),
+      decoration: _box(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'الحركات',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 18),
+          const Text('الحركات', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 14),
           if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(30),
-              child: Center(child: CircularProgressIndicator()),
-            )
+            const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator()))
           else if (rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(30),
-              child: Center(child: Text('لا توجد حركات لهذا المورد')),
-            )
-          else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: const Color(0xFFF7F8F9),
-              child: const Row(
-                children: [
-                  Expanded(child: Text('التاريخ')),
-                  Expanded(flex: 2, child: Text('البيان')),
-                  Expanded(child: Text('مدين')),
-                  Expanded(child: Text('دائن')),
-                ],
-              ),
-            ),
-            ...rows.map(
-              (transaction) => Container(
-                padding: const EdgeInsets.all(14),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xFFF0F1F2))),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(_date(transaction.date))),
-                    Expanded(flex: 2, child: Text(transaction.description)),
-                    Expanded(
-                      child: Text(
-                        transaction.debit == 0
-                            ? '-'
-                            : '${transaction.debit.toStringAsFixed(2)} ج.م',
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        transaction.credit == 0
-                            ? '-'
-                            : '${transaction.credit.toStringAsFixed(2)} ج.م',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            const Center(child: Padding(padding: EdgeInsets.all(30), child: Text('لسه مفيش حركات للمورد ده')))
+          else
+            ...rows.map((row) => ListTile(
+              leading: Icon(row.debit > 0 ? Icons.receipt_long_outlined : Icons.payments_outlined),
+              title: Text(row.description),
+              subtitle: Text(_date(row.date)),
+              trailing: Text(row.debit > 0 ? 'عليه ${_money(row.debit)}' : 'دفع ${_money(row.credit)}'),
+            )),
         ],
       ),
     );
   }
 
-  Widget _emptyState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(50),
-      decoration: _boxDecoration(),
-      child: const Column(
-        children: [
-          Icon(Icons.receipt_long_outlined, size: 50, color: Colors.grey),
-          SizedBox(height: 12),
-          Text('اختر موردًا لعرض كشف حسابه'),
-        ],
-      ),
-    );
-  }
+  Widget _empty() => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(50),
+    decoration: _box(),
+    child: const Column(children: [Icon(Icons.receipt_long_outlined, size: 50, color: Colors.grey), SizedBox(height: 12), Text('اختار مورد عشان تشوف حسابه')]),
+  );
 
-  BoxDecoration _boxDecoration() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE5E9EB)),
-    );
-  }
+  BoxDecoration _box() => BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB)));
 }
 
 class _Summary extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
-
   const _Summary({required this.title, required this.value, required this.icon});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E9EB)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF0E4C4C)),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
+    child: Row(children: [Icon(icon), const SizedBox(width: 10), Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontWeight: FontWeight.bold))]))]),
+  );
 }
 
 class _Transaction {
@@ -382,11 +213,5 @@ class _Transaction {
   final String description;
   final double debit;
   final double credit;
-
-  const _Transaction({
-    required this.date,
-    required this.description,
-    required this.debit,
-    required this.credit,
-  });
+  const _Transaction({required this.date, required this.description, required this.debit, required this.credit});
 }
