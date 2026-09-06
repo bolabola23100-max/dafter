@@ -44,7 +44,7 @@ class SalesRepository {
     final rows = await db.query(DatabaseTables.sales, orderBy: 'date DESC');
     final sales = <Sale>[];
     for (final row in rows) {
-      sales.add(await _fromMap(row));
+      sales.add(await _fromMap(db, row));
     }
     return sales;
   }
@@ -59,21 +59,37 @@ class SalesRepository {
     );
     final sales = <Sale>[];
     for (final row in rows) {
-      sales.add(await _fromMap(row));
+      sales.add(await _fromMap(db, row));
     }
     return sales;
   }
 
   Future<Sale?> getSaleById(String id) async {
     final db = await _database.database;
-    final rows = await db.query(DatabaseTables.sales, where: 'id = ?', whereArgs: [id], limit: 1);
+    return getSaleByIdWithExecutor(db, id);
+  }
+
+  Future<Sale?> getSaleByIdWithExecutor(DatabaseExecutor executor, String id) async {
+    final rows = await executor.query(
+      DatabaseTables.sales,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     if (rows.isEmpty) return null;
-    return _fromMap(rows.first);
+    return _fromMap(executor, rows.first);
   }
 
   Future<List<SaleItem>> getSaleItems(String saleId) async {
     final db = await _database.database;
-    final rows = await db.query(
+    return getSaleItemsWithExecutor(db, saleId);
+  }
+
+  Future<List<SaleItem>> getSaleItemsWithExecutor(
+    DatabaseExecutor executor,
+    String saleId,
+  ) async {
+    final rows = await executor.query(
       DatabaseTables.saleItems,
       where: 'sale_id = ?',
       whereArgs: [saleId],
@@ -81,8 +97,8 @@ class SalesRepository {
     return rows.map(_itemFromMap).toList();
   }
 
-  Future<Sale> _fromMap(Map<String, dynamic> row) async {
-    final items = await getSaleItems(row['id'] as String);
+  Future<Sale> _fromMap(DatabaseExecutor executor, Map<String, dynamic> row) async {
+    final items = await getSaleItemsWithExecutor(executor, row['id'] as String);
     final paid = (row['paid_amount'] as num).toDouble();
     final total = (row['total'] as num).toDouble();
     final status = paid >= total && total > 0
