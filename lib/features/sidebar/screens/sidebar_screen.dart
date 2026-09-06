@@ -6,6 +6,7 @@ import 'package:dafter/features/expenses/screens/expenses_screen.dart';
 import 'package:dafter/features/purchases/screens/purchases_screen.dart';
 import 'package:dafter/features/reports/screens/reports_screen.dart';
 import 'package:dafter/features/sales/screens/sales_screen.dart';
+import 'package:dafter/features/settings/screens/settings_screen.dart';
 import 'package:dafter/features/sidebar/widgets/nav_item.dart';
 import 'package:dafter/features/sidebar/widgets/top_bar.dart';
 import 'package:dafter/features/suppliers/screens/suppliers_screen.dart';
@@ -21,6 +22,7 @@ enum AppScreen {
   accounts,
   expenses,
   reports,
+  settings,
 }
 
 class SidebarScreen extends StatefulWidget {
@@ -59,6 +61,7 @@ class _SidebarScreenState extends State<SidebarScreen> {
                         AccountsScreen(),
                         ExpensesScreen(),
                         ReportsScreen(),
+                        SettingsScreen(),
                       ],
                     ),
                   ),
@@ -99,6 +102,8 @@ class _SidebarScreenState extends State<SidebarScreen> {
                           NavItem(icon: Icons.account_balance_wallet_outlined, label: 'الحسابات', selected: _currentScreen == AppScreen.accounts, onTap: () => setState(() => _currentScreen = AppScreen.accounts)),
                           NavItem(icon: Icons.money_off_outlined, label: 'المصروفات', selected: _currentScreen == AppScreen.expenses, onTap: () => setState(() => _currentScreen = AppScreen.expenses)),
                           NavItem(icon: Icons.bar_chart_outlined, label: 'التقارير', selected: _currentScreen == AppScreen.reports, onTap: () => setState(() => _currentScreen = AppScreen.reports)),
+                          const Divider(height: 24),
+                          NavItem(icon: Icons.settings_outlined, label: 'الإعدادات والنسخ الاحتياطي', selected: _currentScreen == AppScreen.settings, onTap: () => setState(() => _currentScreen = AppScreen.settings)),
                         ],
                       ),
                     ),
