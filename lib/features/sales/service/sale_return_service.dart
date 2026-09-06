@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/Inventory/repositories/stock_movement_repository.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
@@ -58,7 +59,7 @@ class SaleReturnService {
 
     final db = await _database.database;
     await db.transaction((txn) async {
-      final sale = await _salesRepository.getSaleById(saleReturn.saleId);
+      final sale = await _salesRepository.getSaleByIdWithExecutor(txn, saleReturn.saleId);
       if (sale == null) throw Exception('فاتورة البيع مش موجودة');
 
       final customerId = sale.customerId;
@@ -79,12 +80,15 @@ class SaleReturnService {
         }
       }
 
-      final previousRows = await txn.rawQuery('''
-        SELECT sale_item_id, COALESCE(SUM(quantity), 0) AS returned_quantity
-        FROM ${'sale_return_items'}
-        WHERE sale_item_id IN (${saleReturn.items.map((_) => '?').join(',')})
-        GROUP BY sale_item_id
-      ''', saleReturn.items.map((e) => e.saleItemId).toList());
+      final itemIds = saleReturn.items.map((item) => item.saleItemId).toList();
+      final placeholders = List.filled(itemIds.length, '?').join(',');
+      final previousRows = await txn.rawQuery(
+        'SELECT sale_item_id, COALESCE(SUM(quantity), 0) AS returned_quantity '
+        'FROM ${DatabaseTables.saleReturnItems} '
+        'WHERE sale_item_id IN ($placeholders) '
+        'GROUP BY sale_item_id',
+        itemIds,
+      );
       final returnedByItem = <String, int>{
         for (final row in previousRows)
           row['sale_item_id'] as String: (row['returned_quantity'] as num).toInt(),
@@ -93,7 +97,7 @@ class SaleReturnService {
       for (final item in saleReturn.items) {
         if (item.quantity <= 0) throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
         final saleItemRows = await txn.query(
-          'sale_items',
+          DatabaseTables.saleItems,
           where: 'id = ? AND sale_id = ?',
           whereArgs: [item.saleItemId, saleReturn.saleId],
           limit: 1,
@@ -108,6 +112,9 @@ class SaleReturnService {
         }
         if (saleItem['product_id'] as String != item.productId) {
           throw Exception('بيانات المنتج في المرتجع مش مطابقة للفاتورة');
+        }
+        if ((saleItem['price'] as num).toDouble() != item.price) {
+          throw Exception('سعر المرتجع مش مطابق لسعر الفاتورة');
         }
       }
 
