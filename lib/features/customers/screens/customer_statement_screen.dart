@@ -36,6 +36,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
     try {
       final customers = await _customerRepository.getCustomers();
       if (!mounted) return;
+
       Customer? selected;
       if (widget.customerId != null) {
         for (final customer in customers) {
@@ -45,12 +46,16 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
           }
         }
       }
+
       setState(() {
         _customers = customers;
         _selectedCustomer = selected;
         _isLoading = false;
       });
-      if (selected != null) await _loadStatement(selected.id);
+
+      if (selected != null) {
+        await _loadStatement(selected.id);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -64,6 +69,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
         _salesRepository.getSalesByCustomer(customerId),
         _paymentRepository.getPaymentsByPerson(customerId),
       ]);
+
       if (!mounted) return;
       setState(() {
         _sales = results[0] as List<Sale>;
@@ -83,12 +89,28 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
       _sales = [];
       _payments = [];
     });
-    if (customer != null) _loadStatement(customer.id);
+
+    if (customer != null) {
+      _loadStatement(customer.id);
+    }
   }
 
   double get _totalSales => _sales.fold(0, (sum, sale) => sum + sale.total);
+
+  double get _totalSalesRemaining =>
+      _sales.fold(0, (sum, sale) => sum + sale.remainingAmount);
+
   double get _totalReceipts =>
       _payments.fold(0, (sum, payment) => sum + payment.amount);
+
+  double get _calculatedBalance {
+    final customer = _selectedCustomer;
+    if (customer == null) return 0;
+
+    return customer.openingBalance +
+        _totalSalesRemaining -
+        _totalReceipts;
+  }
 
   String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
 
@@ -97,13 +119,15 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final customer = _selectedCustomer;
-    final balance = customer?.balance ?? 0;
+    final balance = customer == null ? 0.0 : _calculatedBalance;
 
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -116,7 +140,9 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE5E9EB))),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFE5E9EB)),
+                ),
               ),
               child: Row(
                 children: [
@@ -127,7 +153,10 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
                   const SizedBox(width: 10),
                   const Text(
                     'كشف حساب عميل',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -189,37 +218,64 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   Widget _buildSummary(Customer customer, double balance) {
     return Row(
       children: [
-        Expanded(child: _SummaryCard(title: 'رصيد قبل كده', value: _money(customer.openingBalance))),
+        Expanded(
+          child: _SummaryCard(
+            title: 'رصيد قبل كده',
+            value: _money(customer.openingBalance),
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _SummaryCard(title: 'إجمالي المبيعات', value: _money(_totalSales))),
+        Expanded(
+          child: _SummaryCard(
+            title: 'إجمالي المبيعات',
+            value: _money(_totalSales),
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _SummaryCard(title: 'إجمالي اللي اتدفع', value: _money(_totalReceipts))),
+        Expanded(
+          child: _SummaryCard(
+            title: 'إجمالي اللي اتدفع',
+            value: _money(_totalReceipts),
+          ),
+        ),
         const SizedBox(width: 12),
-        Expanded(child: _SummaryCard(title: 'عليه دلوقتي', value: _money(balance))),
+        Expanded(
+          child: _SummaryCard(
+            title: 'عليه دلوقتي',
+            value: _money(balance),
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildTransactions() {
     final rows = <_StatementRow>[];
+
     for (final sale in _sales) {
-      rows.add(_StatementRow(
-        date: sale.date,
-        title: 'فاتورة بيع',
-        subtitle: 'إجمالي الفاتورة ${_money(sale.total)}',
-        amount: sale.total,
-        isReceipt: false,
-      ));
+      rows.add(
+        _StatementRow(
+          date: sale.date,
+          title: 'فاتورة بيع',
+          subtitle: 'إجمالي ${_money(sale.total)}',
+          amount: sale.remainingAmount,
+          isReceipt: false,
+        ),
+      );
     }
+
     for (final payment in _payments) {
-      rows.add(_StatementRow(
-        date: payment.date,
-        title: 'تحصيل دفعة',
-        subtitle: payment.notes ?? 'تحصيل من العميل',
-        amount: payment.amount,
-        isReceipt: true,
-      ));
+      rows.add(
+        _StatementRow(
+          date: payment.date,
+          title: 'تحصيل دفعة',
+          subtitle: payment.notes ?? 'تحصيل من العميل',
+          amount: payment.amount,
+          isReceipt: true,
+        ),
+      );
     }
+
     rows.sort((a, b) => b.date.compareTo(a.date));
 
     return _Card(
@@ -242,7 +298,9 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(
                   row.isReceipt ? Icons.arrow_downward : Icons.receipt_long,
-                  color: row.isReceipt ? Colors.green : const Color(0xFF0E4C4C),
+                  color: row.isReceipt
+                      ? Colors.green
+                      : const Color(0xFF0E4C4C),
                 ),
                 title: Text(row.title),
                 subtitle: Text('${_date(row.date)} — ${row.subtitle}'),
@@ -263,7 +321,9 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
         padding: const EdgeInsets.all(40),
         child: Center(
           child: Text(
-            _customers.isEmpty ? 'لسه مفيش عملاء' : 'اختار العميل عشان تشوف حسابه',
+            _customers.isEmpty
+                ? 'لسه مفيش عملاء'
+                : 'اختار العميل عشان تشوف حسابه',
           ),
         ),
       ),
@@ -289,6 +349,7 @@ class _StatementRow {
 
 class _Card extends StatelessWidget {
   final Widget child;
+
   const _Card({required this.child});
 
   @override
@@ -308,6 +369,7 @@ class _Card extends StatelessWidget {
 class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
+
   const _SummaryCard({required this.title, required this.value});
 
   @override
