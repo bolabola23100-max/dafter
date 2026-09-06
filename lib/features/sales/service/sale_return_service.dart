@@ -113,9 +113,6 @@ class SaleReturnService {
         if (saleItem['product_id'] as String != item.productId) {
           throw Exception('بيانات المنتج في المرتجع مش مطابقة للفاتورة');
         }
-        if ((saleItem['price'] as num).toDouble() != item.price) {
-          throw Exception('سعر المرتجع مش مطابق لسعر الفاتورة');
-        }
       }
 
       await _returnRepository.addReturnWithExecutor(txn, saleReturn);
@@ -123,11 +120,7 @@ class SaleReturnService {
       for (final item in saleReturn.items) {
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج مش موجود');
-        await _productRepository.updateStockWithExecutor(
-          txn,
-          product.id,
-          product.quantity + item.quantity,
-        );
+        await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity + item.quantity);
         await _stockMovementRepository.addMovementWithExecutor(
           txn,
           StockMovement(
@@ -183,11 +176,7 @@ class SaleReturnService {
           ),
         );
 
-        await _accountRepository.updateBalanceWithExecutor(
-          txn,
-          account.id,
-          account.balance - saleReturn.refundedAmount,
-        );
+        await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance - saleReturn.refundedAmount);
       }
     });
   }
