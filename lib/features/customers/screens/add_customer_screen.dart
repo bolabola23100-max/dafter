@@ -1,5 +1,5 @@
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
-import 'package:dafter/features/customers/model/customer.dart';
+import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:flutter/material.dart';
 
@@ -46,8 +46,12 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
       final customer = Customer(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         name: _nameController.text.trim(),
-        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+        address: _addressController.text.trim().isEmpty
+            ? null
+            : _addressController.text.trim(),
         openingBalance: openingBalance,
         balance: openingBalance,
       );
@@ -90,7 +94,10 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
                     icon: const Icon(Icons.arrow_back, size: 21),
                   ),
                   const SizedBox(width: 10),
-                  const Text('إضافة عميل جديد', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'إضافة عميل جديد',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
             ),
@@ -116,25 +123,38 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
                               children: [
                                 CustomTextFormField(
                                   controller: _nameController,
-                                  decoration: const InputDecoration(labelText: 'اسم العميل *'),
-                                  validator: (v) => v == null || v.trim().isEmpty ? 'اكتب اسم العميل' : null,
+                                  decoration: const InputDecoration(
+                                    labelText: 'اسم العميل *',
+                                  ),
+                                  validator: (v) => v == null || v.trim().isEmpty
+                                      ? 'اكتب اسم العميل'
+                                      : null,
                                 ),
                                 const SizedBox(height: 16),
                                 CustomTextFormField(
                                   controller: _phoneController,
                                   keyboardType: TextInputType.phone,
-                                  decoration: const InputDecoration(labelText: 'رقم التليفون'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'رقم التليفون',
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 CustomTextFormField(
                                   controller: _addressController,
-                                  decoration: const InputDecoration(labelText: 'العنوان (اختياري)'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'العنوان (اختياري)',
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 CustomTextFormField(
                                   controller: _openingBalanceController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  decoration: const InputDecoration(labelText: 'فلوس عليه من قبل (رصيد افتتاحي)'),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    labelText: 'فلوس عليه من قبل (رصيد افتتاحي)',
+                                  ),
                                 ),
                               ],
                             ),
@@ -143,12 +163,27 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              OutlinedButton(onPressed: _isSaving ? null : () => Navigator.pop(context), child: const Text('إلغاء')),
+                              OutlinedButton(
+                                onPressed: _isSaving
+                                    ? null
+                                    : () => Navigator.pop(context),
+                                child: const Text('إلغاء'),
+                              ),
                               const SizedBox(width: 12),
                               ElevatedButton.icon(
                                 onPressed: _isSaving ? null : _saveCustomer,
-                                icon: _isSaving ? const SizedBox(width: 19, height: 19, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check, size: 19),
-                                label: Text(_isSaving ? 'بيحفظ...' : 'حفظ العميل'),
+                                icon: _isSaving
+                                    ? const SizedBox(
+                                        width: 19,
+                                        height: 19,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.check, size: 19),
+                                label: Text(
+                                  _isSaving ? 'بيحفظ...' : 'حفظ العميل',
+                                ),
                               ),
                             ],
                           ),
