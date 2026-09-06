@@ -39,19 +39,18 @@ class AppDatabaseWatcher {
     try {
       final mainDatabase = await AppDatabase.instance.database;
       final rows = await mainDatabase.rawQuery('PRAGMA database_list');
-      final databasePath = rows.firstWhere(
-        (row) => row['name'] == 'main',
-        orElse: () => <String, Object?>{},
-      )['file'] as String?;
+      final databasePath =
+          rows.firstWhere(
+                (row) => row['name'] == 'main',
+                orElse: () => <String, Object?>{},
+              )['file']
+              as String?;
 
       if (databasePath == null || databasePath.isEmpty) return;
 
       _watchDatabase = await databaseFactoryFfi.openDatabase(
         databasePath,
-        options: OpenDatabaseOptions(
-          readOnly: true,
-          singleInstance: false,
-        ),
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
       );
 
       _lastVersion = await _readVersion();
