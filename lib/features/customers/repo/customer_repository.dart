@@ -2,7 +2,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
-import 'package:dafter/features/customers/model/customer.dart';
+import 'package:dafter/features/model/customer.dart';
 
 class CustomerRepository {
   final AppDatabase _database = AppDatabase.instance;
@@ -20,80 +20,40 @@ class CustomerRepository {
 
   Future<Customer?> getCustomerById(String id) async {
     final db = await _database.database;
-    final rows = await db.query(
-      DatabaseTables.customers,
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : _fromMap(rows.first);
+    return getCustomerByIdWithExecutor(db, id);
   }
 
-  Future<Customer?> getCustomerByIdWithExecutor(
-    DatabaseExecutor executor,
-    String id,
-  ) async {
-    final rows = await executor.query(
-      DatabaseTables.customers,
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
+  Future<Customer?> getCustomerByIdWithExecutor(DatabaseExecutor executor, String id) async {
+    final rows = await executor.query(DatabaseTables.customers, where: 'id = ?', whereArgs: [id], limit: 1);
     return rows.isEmpty ? null : _fromMap(rows.first);
   }
 
   Future<List<Customer>> searchCustomers(String query) async {
     final db = await _database.database;
     final value = '%${query.trim()}%';
-    final rows = await db.query(
-      DatabaseTables.customers,
-      where: 'name LIKE ? OR phone LIKE ?',
-      whereArgs: [value, value],
-      orderBy: 'name ASC',
-    );
+    final rows = await db.query(DatabaseTables.customers,
+        where: 'name LIKE ? OR phone LIKE ?', whereArgs: [value, value], orderBy: 'name ASC');
     return rows.map(_fromMap).toList();
   }
 
   Future<void> updateCustomer(Customer customer) async {
     final db = await _database.database;
-    await db.update(
-      DatabaseTables.customers,
-      _toMap(customer),
-      where: 'id = ?',
-      whereArgs: [customer.id],
-    );
+    await db.update(DatabaseTables.customers, _toMap(customer), where: 'id = ?', whereArgs: [customer.id]);
   }
 
   Future<void> updateBalance(String customerId, double newBalance) async {
     final db = await _database.database;
-    await db.update(
-      DatabaseTables.customers,
-      {'balance': newBalance, 'updated_at': DateTime.now().toIso8601String()},
-      where: 'id = ?',
-      whereArgs: [customerId],
-    );
+    await updateBalanceWithExecutor(db, customerId, newBalance);
   }
 
-  Future<void> updateBalanceWithExecutor(
-    DatabaseExecutor executor,
-    String customerId,
-    double newBalance,
-  ) async {
-    await executor.update(
-      DatabaseTables.customers,
-      {'balance': newBalance, 'updated_at': DateTime.now().toIso8601String()},
-      where: 'id = ?',
-      whereArgs: [customerId],
-    );
+  Future<void> updateBalanceWithExecutor(DatabaseExecutor executor, String customerId, double newBalance) async {
+    await executor.update(DatabaseTables.customers,
+        {'balance': newBalance, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [customerId]);
   }
 
   Future<void> deleteCustomer(String id) async {
     final db = await _database.database;
-    await db.delete(
-      DatabaseTables.customers,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete(DatabaseTables.customers, where: 'id = ?', whereArgs: [id]);
   }
 
   Map<String, Object?> _toMap(Customer customer) {
@@ -110,14 +70,12 @@ class CustomerRepository {
     };
   }
 
-  Customer _fromMap(Map<String, Object?> map) {
-    return Customer(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      phone: map['phone'] as String?,
-      address: map['address'] as String?,
-      openingBalance: (map['opening_balance'] as num?)?.toDouble() ?? 0,
-      balance: (map['balance'] as num?)?.toDouble() ?? 0,
-    );
-  }
+  Customer _fromMap(Map<String, Object?> map) => Customer(
+    id: map['id'] as String,
+    name: map['name'] as String,
+    phone: map['phone'] as String?,
+    address: map['address'] as String?,
+    openingBalance: (map['opening_balance'] as num?)?.toDouble() ?? 0,
+    balance: (map['balance'] as num?)?.toDouble() ?? 0,
+  );
 }
