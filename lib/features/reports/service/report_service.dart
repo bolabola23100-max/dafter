@@ -6,26 +6,55 @@ class ReportService {
   final AppDatabase _database;
 
   ReportService({AppDatabase? database})
-      : _database = database ?? AppDatabase.instance;
+    : _database = database ?? AppDatabase.instance;
 
   Future<ReportSummary> getSummary({DateTime? from, DateTime? to}) async {
     final db = await _database.database;
     final sales = await _aggregate(db, DatabaseTables.sales, 'total', from, to);
-    final purchases = await _aggregate(db, DatabaseTables.purchases, 'total', from, to);
-    final expenses = await _aggregate(db, DatabaseTables.expenses, 'amount', from, to);
-    final salesReturns = await _aggregate(db, DatabaseTables.saleReturns, 'total', from, to);
-    final purchaseReturns = await _aggregate(db, DatabaseTables.purchaseReturns, 'total', from, to);
+    final purchases = await _aggregate(
+      db,
+      DatabaseTables.purchases,
+      'total',
+      from,
+      to,
+    );
+    final expenses = await _aggregate(
+      db,
+      DatabaseTables.expenses,
+      'amount',
+      from,
+      to,
+    );
+    final salesReturns = await _aggregate(
+      db,
+      DatabaseTables.saleReturns,
+      'total',
+      from,
+      to,
+    );
+    final purchaseReturns = await _aggregate(
+      db,
+      DatabaseTables.purchaseReturns,
+      'total',
+      from,
+      to,
+    );
 
     final productRows = await db.query(DatabaseTables.products);
     final stockValue = productRows.fold<double>(
       0,
-      (sum, row) => sum +
+      (sum, row) =>
+          sum +
           ((row['quantity'] as num?)?.toDouble() ?? 0) *
               ((row['purchase_price'] as num?)?.toDouble() ?? 0),
     );
 
-    final suppliers = await db.rawQuery('SELECT COUNT(*) AS count FROM ${DatabaseTables.suppliers}');
-    final customers = await db.rawQuery('SELECT COUNT(*) AS count FROM ${DatabaseTables.customers}');
+    final suppliers = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM ${DatabaseTables.suppliers}',
+    );
+    final customers = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM ${DatabaseTables.customers}',
+    );
 
     return ReportSummary(
       salesCount: sales.count,
