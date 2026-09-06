@@ -1,4 +1,3 @@
-import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/accounts/widgets/transaction_tile.dart';
 import 'package:flutter/material.dart';
@@ -10,13 +9,20 @@ class RecentTransactionsCard extends StatelessWidget {
 
   String _title(AccountTransaction transaction) {
     switch (transaction.type) {
-      case TransactionType.sale: return 'فاتورة بيع';
-      case TransactionType.purchase: return 'فاتورة شراء';
-      case TransactionType.payment: return 'دفع';
-      case TransactionType.receipt: return 'قبض';
-      case TransactionType.expense: return 'مصروف';
-      case TransactionType.transfer: return 'تحويل';
-      case TransactionType.adjustment: return 'تعديل رصيد';
+      case TransactionType.sale:
+        return 'فاتورة بيع';
+      case TransactionType.purchase:
+        return 'فاتورة شراء';
+      case TransactionType.payment:
+        return 'دفع';
+      case TransactionType.receipt:
+        return 'قبض';
+      case TransactionType.expense:
+        return 'مصروف';
+      case TransactionType.transfer:
+        return 'تحويل';
+      case TransactionType.adjustment:
+        return 'تعديل رصيد';
     }
   }
 
@@ -30,30 +36,44 @@ class RecentTransactionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (transactions.isEmpty) {
       return Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E9EB)),
+        ),
         alignment: Alignment.center,
         child: const Text('لسه مفيش حركات مالية'),
       );
     }
 
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E9EB)),
+      ),
       child: ListView.separated(
         padding: EdgeInsets.zero,
         itemCount: transactions.length > 10 ? 10 : transactions.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFE5E9EB)),
+        separatorBuilder: (_, __) =>
+            const Divider(height: 1, color: Color(0xFFE5E9EB)),
         itemBuilder: (_, index) {
           final transaction = transactions[index] as AccountTransaction;
           final isDebit = transaction.isDebit;
           return TransactionTile(
-            icon: isDebit ? Icons.arrow_upward_outlined : Icons.arrow_downward_outlined,
+            icon: isDebit
+                ? Icons.arrow_upward_outlined
+                : Icons.arrow_downward_outlined,
             iconBg: isDebit ? const Color(0xFFFCEAEA) : const Color(0xFFE8F5E9),
             iconColor: isDebit ? Colors.red : Colors.green,
-            title: transaction.description?.trim().isNotEmpty == true ? transaction.description! : _title(transaction),
+            title: transaction.description?.trim().isNotEmpty == true
+                ? transaction.description!
+                : _title(transaction),
             subtitle: _title(transaction),
             account: transaction.accountId,
             date: _date(transaction.date),
-            amount: '${isDebit ? '-' : '+'}${transaction.amount.toStringAsFixed(2)} جنيه',
+            amount:
+                '${isDebit ? '-' : '+'}${transaction.amount.toStringAsFixed(2)} جنيه',
             amountColor: isDebit ? Colors.red : Colors.green,
           );
         },

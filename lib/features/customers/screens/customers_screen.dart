@@ -1,6 +1,6 @@
 import 'package:dafter/core/widgets/action_button.dart';
 import 'package:dafter/core/widgets/nav.dart';
-import 'package:dafter/features/customers/model/customer.dart';
+import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/customers/screens/add_customer_screen.dart';
 import 'package:dafter/features/customers/screens/record_payment_screen.dart';
@@ -41,14 +41,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('مش قادر أجيب العملاء: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('مش قادر أجيب العملاء: $e')));
     }
   }
 
   List<Customer> get _filteredCustomers {
     final query = _searchController.text.trim().toLowerCase();
     return _customers.where((c) {
-      final matchesSearch = query.isEmpty || c.name.toLowerCase().contains(query) || (c.phone ?? '').contains(query);
+      final matchesSearch =
+          query.isEmpty ||
+          c.name.toLowerCase().contains(query) ||
+          (c.phone ?? '').contains(query);
       final matchesDebt = !showDebtorsOnly || c.balance > 0;
       return matchesSearch && matchesDebt;
     }).toList();
@@ -62,32 +67,93 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalDebt = _customers.fold<double>(0, (sum, c) => sum + (c.balance > 0 ? c.balance : 0));
+    final totalDebt = _customers.fold<double>(
+      0,
+      (sum, c) => sum + (c.balance > 0 ? c.balance : 0),
+    );
     return Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: ActionButton(icon: Icons.receipt_long_outlined, label: 'كشف حساب', primary: false, onTap: _showSelectCustomerDialog)),
-          const SizedBox(width: 12),
-          Expanded(child: ActionButton(icon: Icons.person_add_outlined, label: 'إضافة عميل', primary: false, onTap: () async { final saved = await Nav.push(context, const AddCustomerScreen()); if (saved == true) _loadCustomers(); })),
-          const SizedBox(width: 12),
-          Expanded(child: ActionButton(icon: Icons.payments_outlined, label: 'تحصيل دفعة', primary: false, onTap: _showPaymentForAnyCustomer)),
-          const SizedBox(width: 12),
-          Expanded(child: ActionButton(icon: Icons.shopping_cart_outlined, label: 'فاتورة بيع', primary: true, onTap: () => Nav.push(context, const SalesInvoiceScreen()))),
-        ]),
-        const SizedBox(height: 20),
-        CustomersSummaryRow(totalCustomers: _customers.length, totalDebt: totalDebt),
-        const SizedBox(height: 20),
-        CustomersFilterBar(searchController: _searchController, showDebtorsOnly: showDebtorsOnly, onDebtorsFilterChanged: (value) => setState(() => showDebtorsOnly = value), onSearchChanged: (_) => setState(() {})),
-        const SizedBox(height: 16),
-        Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : CustomersTable(customers: _filteredCustomers, onViewCustomer: _showCustomerDetails, onRecordPayment: _recordPayment)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ActionButton(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'كشف حساب',
+                  primary: false,
+                  onTap: _showSelectCustomerDialog,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ActionButton(
+                  icon: Icons.person_add_outlined,
+                  label: 'إضافة عميل',
+                  primary: false,
+                  onTap: () async {
+                    final saved = await Nav.push(
+                      context,
+                      const AddCustomerScreen(),
+                    );
+                    if (saved == true) _loadCustomers();
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ActionButton(
+                  icon: Icons.payments_outlined,
+                  label: 'تحصيل دفعة',
+                  primary: false,
+                  onTap: _showPaymentForAnyCustomer,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ActionButton(
+                  icon: Icons.shopping_cart_outlined,
+                  label: 'فاتورة بيع',
+                  primary: true,
+                  onTap: () => Nav.push(context, const SalesInvoiceScreen()),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          CustomersSummaryRow(
+            totalCustomers: _customers.length,
+            totalDebt: totalDebt,
+          ),
+          const SizedBox(height: 20),
+          CustomersFilterBar(
+            searchController: _searchController,
+            showDebtorsOnly: showDebtorsOnly,
+            onDebtorsFilterChanged: (value) =>
+                setState(() => showDebtorsOnly = value),
+            onSearchChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : CustomersTable(
+                    customers: _filteredCustomers,
+                    onViewCustomer: _showCustomerDetails,
+                    onRecordPayment: _recordPayment,
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _showSelectCustomerDialog() async {
     if (_customers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لسه مفيش عملاء')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('لسه مفيش عملاء')));
       return;
     }
     await showDialog<void>(
@@ -96,10 +162,26 @@ class _CustomersScreenState extends State<CustomersScreen> {
         textDirection: TextDirection.ltr,
         child: AlertDialog(
           title: const Text('اختار العميل'),
-          content: SizedBox(width: 350, child: ListView.builder(shrinkWrap: true, itemCount: _customers.length, itemBuilder: (context, index) {
-            final customer = _customers[index];
-            return ListTile(title: Text(customer.name), subtitle: Text('${customer.balance.toStringAsFixed(2)} جنيه عليه'), onTap: () { Navigator.pop(context); _showCustomerDetails(customer); });
-          })),
+          content: SizedBox(
+            width: 350,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _customers.length,
+              itemBuilder: (context, index) {
+                final customer = _customers[index];
+                return ListTile(
+                  title: Text(customer.name),
+                  subtitle: Text(
+                    '${customer.balance.toStringAsFixed(2)} جنيه عليه',
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showCustomerDetails(customer);
+                  },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -107,14 +189,22 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   void _showPaymentForAnyCustomer() {
     if (_customers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ضيف عميل الأول')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ضيف عميل الأول')));
       return;
     }
-    Nav.push(context, RecordPaymentScreen(customers: _customers)).then((_) => _loadCustomers());
+    Nav.push(
+      context,
+      RecordPaymentScreen(customers: _customers),
+    ).then((_) => _loadCustomers());
   }
 
   void _recordPayment(Customer customer) {
-    Nav.push(context, RecordPaymentScreen(customers: [customer])).then((_) => _loadCustomers());
+    Nav.push(
+      context,
+      RecordPaymentScreen(customers: [customer]),
+    ).then((_) => _loadCustomers());
   }
 
   void _showCustomerDetails(Customer customer) {
@@ -122,8 +212,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(customer.name),
-        content: Text('الرصيد الحالي: ${customer.balance.toStringAsFixed(2)} جنيه\n\n${customer.balance > 0 ? 'العميل عليه فلوس.' : 'مفيش عليه فلوس حالياً.'}'),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('تمام'))],
+        content: Text(
+          'الرصيد الحالي: ${customer.balance.toStringAsFixed(2)} جنيه\n\n${customer.balance > 0 ? 'العميل عليه فلوس.' : 'مفيش عليه فلوس حالياً.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('تمام'),
+          ),
+        ],
       ),
     );
   }

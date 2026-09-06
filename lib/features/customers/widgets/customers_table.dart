@@ -1,4 +1,4 @@
-import 'package:dafter/features/customers/model/customer.dart';
+import 'package:dafter/features/model/customer.dart';
 import 'package:flutter/material.dart';
 
 class CustomersTable extends StatelessWidget {
