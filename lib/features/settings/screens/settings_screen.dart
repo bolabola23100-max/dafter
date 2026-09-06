@@ -89,15 +89,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _backupLoading ? () {} : _backupNow,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ActionButton(
-                    icon: Icons.restore_outlined,
-                    label: 'استعادة',
-                    primary: false,
-                    onTap: () => _message('الاستعادة تحتاج تأكيد واستبدال قاعدة البيانات الحالية، وهنضيفها بشكل آمن قبل التسليم.'),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 20),
