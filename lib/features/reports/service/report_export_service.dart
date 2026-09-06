@@ -5,7 +5,6 @@ import 'package:excel/excel.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import 'package:dafter/features/reports/model/report_summary.dart';
 
@@ -17,18 +16,12 @@ class ReportExportService {
   }) async {
     final location = await getSaveLocation(
       suggestedName: 'تقرير_دفتر.pdf',
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'PDF', extensions: ['pdf']),
-      ],
+      acceptedTypeGroups: const [XTypeGroup(label: 'PDF', extensions: ['pdf'])],
     );
     if (location == null) return false;
 
     final bytes = await _buildPdf(summary, period, report);
-    await XFile.fromData(
-      bytes,
-      name: 'تقرير_دفتر.pdf',
-      mimeType: 'application/pdf',
-    ).saveTo(location.path);
+    await XFile.fromData(bytes, name: 'تقرير_دفتر.pdf', mimeType: 'application/pdf').saveTo(location.path);
     return true;
   }
 
@@ -39,9 +32,7 @@ class ReportExportService {
   }) async {
     final location = await getSaveLocation(
       suggestedName: 'تقرير_دفتر.xlsx',
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'Excel', extensions: ['xlsx']),
-      ],
+      acceptedTypeGroups: const [XTypeGroup(label: 'Excel', extensions: ['xlsx'])],
     );
     if (location == null) return false;
 
@@ -79,23 +70,13 @@ class ReportExportService {
     ]);
   }
 
-  Future<Uint8List> _buildPdf(
-    ReportSummary summary,
-    String period,
-    String report,
-  ) async {
+  Future<Uint8List> _buildPdf(ReportSummary summary, String period, String report) async {
     final document = pw.Document();
     pw.Font? regular;
     pw.Font? bold;
 
-    const fontPaths = [
-      'C:\\Windows\\Fonts\\arial.ttf',
-      'C:\\Windows\\Fonts\\tahoma.ttf',
-    ];
-    const boldPaths = [
-      'C:\\Windows\\Fonts\\arialbd.ttf',
-      'C:\\Windows\\Fonts\\tahomabd.ttf',
-    ];
+    const fontPaths = ['C:\\Windows\\Fonts\\arial.ttf', 'C:\\Windows\\Fonts\\tahoma.ttf'];
+    const boldPaths = ['C:\\Windows\\Fonts\\arialbd.ttf', 'C:\\Windows\\Fonts\\tahomabd.ttf'];
 
     for (final path in fontPaths) {
       final file = File(path);
@@ -112,15 +93,10 @@ class ReportExportService {
       }
     }
 
-    final theme = pw.ThemeData.withFont(
-      base: regular,
-      bold: bold,
-    );
-
     document.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        theme: theme,
+        theme: pw.ThemeData.withFont(base: regular, bold: bold),
         build: (_) => [
           pw.Directionality(
             textDirection: pw.TextDirection.rtl,
