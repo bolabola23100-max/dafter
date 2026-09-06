@@ -111,8 +111,8 @@ class ReportExportService {
     for (final row in sheet.rows) {
       for (final cell in row) {
         cell?.cellStyle = CellStyle(
-          horizontalAlign: HorizontalAlign.center,
-          verticalAlign: VerticalAlign.center,
+          horizontalAlign: HorizontalAlign.Center,
+          verticalAlign: VerticalAlign.Center,
         );
       }
     }
