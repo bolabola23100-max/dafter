@@ -31,16 +31,15 @@ class _ReportFilterScreenState extends State<ReportFilterScreen> {
     'المبيعات',
     'المشتريات',
     'المصروفات',
-    'الأرباح',
+    'صافي الحركة',
     'المخزون',
   ];
 
   @override
   void initState() {
     super.initState();
-
     selectedPeriod = widget.initialPeriod;
-    selectedReport = widget.initialReport;
+    selectedReport = widget.initialReport == 'الأرباح' ? 'صافي الحركة' : widget.initialReport;
   }
 
   void _applyFilter() {
@@ -59,23 +58,15 @@ class _ReportFilterScreenState extends State<ReportFilterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
+        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          initialValue: items.contains(value) ? value : items.first,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           ),
-          items: items
-              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-              .toList(),
+          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
           onChanged: onChanged,
         ),
       ],
@@ -102,46 +93,30 @@ class _ReportFilterScreenState extends State<ReportFilterScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 30),
-
                 _dropdown(
                   title: 'الفترة',
                   value: selectedPeriod,
                   items: periods,
                   onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedPeriod = value;
-                      });
-                    }
+                    if (value != null) setState(() => selectedPeriod = value);
                   },
                 ),
-
                 const SizedBox(height: 20),
-
                 _dropdown(
                   title: 'نوع التقرير',
                   value: selectedReport,
                   items: reports,
                   onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedReport = value;
-                      });
-                    }
+                    if (value != null) setState(() => selectedReport = value);
                   },
                 ),
-
                 const Spacer(),
-
                 ElevatedButton.icon(
                   onPressed: _applyFilter,
                   icon: const Icon(Icons.check),
                   label: const Padding(
                     padding: EdgeInsets.all(14),
-                    child: Text(
-                      'تطبيق التصفية',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                    child: Text('تطبيق التصفية', style: TextStyle(fontSize: 16)),
                   ),
                 ),
               ],
