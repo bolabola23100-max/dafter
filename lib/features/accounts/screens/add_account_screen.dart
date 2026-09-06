@@ -1,5 +1,8 @@
-import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:flutter/material.dart';
+
+import 'package:dafter/core/widgets/custom_text_form_field.dart';
+import 'package:dafter/features/accounts/repo/account_repository.dart';
+import 'package:dafter/features/model/account.dart';
 
 class AddAccountScreen extends StatefulWidget {
   const AddAccountScreen({super.key});
@@ -9,136 +12,155 @@ class AddAccountScreen extends StatefulWidget {
 }
 
 class _AddAccountScreenState extends State<AddAccountScreen> {
-  final nameController = TextEditingController();
-  final openingBalanceController = TextEditingController();
-  final noteController = TextEditingController();
-  String type = 'صندوق';
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _openingBalanceController = TextEditingController();
+  final _accountRepository = AccountRepository();
 
-  final types = ['صندوق', 'بنك', 'مصروف', 'إيراد', 'أخرى'];
+  String _type = 'صندوق';
+  bool _isSaving = false;
 
   @override
   void dispose() {
-    nameController.dispose();
-    openingBalanceController.dispose();
+    _nameController.dispose();
+    _openingBalanceController.dispose();
     super.dispose();
   }
 
-  void saveAccount() {
-    final name = nameController.text.trim();
-
-    if (name.isEmpty) {
-      _message('أدخل اسم الحساب');
-      return;
+  AccountType _mapAccountType(String type) {
+    switch (type) {
+      case 'بنك':
+        return AccountType.bank;
+      case 'مصروف':
+        return AccountType.expense;
+      case 'إيراد':
+        return AccountType.income;
+      case 'أخرى':
+        return AccountType.other;
+      case 'صندوق':
+      default:
+        return AccountType.cash;
     }
+  }
 
-    final balance = double.tryParse(openingBalanceController.text) ?? 0;
+  Future<void> _saveAccount() async {
+    if (_isSaving) return;
+
+    if (!_formKey.currentState!.validate()) return;
+
+    final name = _nameController.text.trim();
+    final balance = double.tryParse(_openingBalanceController.text.trim()) ?? 0;
 
     if (balance < 0) {
       _message('الرصيد الافتتاحي غير صحيح');
       return;
     }
 
-    _message('تم إضافة الحساب بنجاح');
-    Navigator.pop(context);
+    setState(() => _isSaving = true);
+
+    try {
+      final account = Account(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: name,
+        type: _mapAccountType(_type),
+        openingBalance: balance,
+        balance: balance,
+      );
+
+      await _accountRepository.addAccount(account);
+
+      if (!mounted) return;
+      _message('تم إضافة الحساب بنجاح');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      _message('تعذر حفظ الحساب: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
-  void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
-    );
+  void _message(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8F9),
       appBar: AppBar(
         title: const Text('إضافة حساب'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: const Color(0xFFE5E9EB)),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              CustomTextFormField(
+                openingBalanceController: _nameController,
+                hintText: 'اسم الحساب',
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'أدخل اسم الحساب';
+                  }
+                  return null;
+                },
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'حساب جديد',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  CustomTextFormField(
-                    openingBalanceController: nameController,
-                    label: 'اسم الحساب',
-                    hintText: 'مثال: خزنة المحل',
-                    prefixIcon: Icons.account_balance_wallet_outlined,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  DropdownButtonFormField<String>(
-                    initialValue: type,
-                    decoration: InputDecoration(
-                      labelText: 'نوع الحساب',
-                      prefixIcon: const Icon(Icons.category_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    items: types
-                        .map(
-                          (item) =>
-                              DropdownMenuItem(value: item, child: Text(item)),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => type = value);
-                      }
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  CustomTextFormField(
-                    openingBalanceController: openingBalanceController,
-                    label: 'الرصيد الافتتاحي',
-                    hintText: '0.00',
-                    suffixText: 'ج.م',
-                    prefixIcon: Icons.money_outlined,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  ElevatedButton.icon(
-                    onPressed: saveAccount,
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('حفظ الحساب'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                  ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _type,
+                decoration: const InputDecoration(
+                  labelText: 'نوع الحساب',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'صندوق', child: Text('صندوق')),
+                  DropdownMenuItem(value: 'بنك', child: Text('بنك')),
+                  DropdownMenuItem(value: 'مصروف', child: Text('مصروف')),
+                  DropdownMenuItem(value: 'إيراد', child: Text('إيراد')),
+                  DropdownMenuItem(value: 'أخرى', child: Text('أخرى')),
                 ],
+                onChanged: _isSaving
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          setState(() => _type = value);
+                        }
+                      },
               ),
-            ),
+              const SizedBox(height: 16),
+              CustomTextFormField(
+                openingBalanceController: _openingBalanceController,
+                hintText: 'الرصيد الافتتاحي',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return null;
+                  final balance = double.tryParse(value.trim());
+                  if (balance == null || balance < 0) {
+                    return 'أدخل رصيدًا صحيحًا';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _saveAccount,
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('حفظ الحساب'),
+                ),
+              ),
+            ],
           ),
         ),
       ),
