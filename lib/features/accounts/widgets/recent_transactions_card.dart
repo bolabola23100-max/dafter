@@ -55,7 +55,7 @@ class RecentTransactionsCard extends StatelessWidget {
       child: ListView.separated(
         padding: EdgeInsets.zero,
         itemCount: transactions.length > 10 ? 10 : transactions.length,
-        separatorBuilder: (_, __) =>
+        separatorBuilder: (_, _) =>
             const Divider(height: 1, color: Color(0xFFE5E9EB)),
         itemBuilder: (_, index) {
           final transaction = transactions[index] as AccountTransaction;
