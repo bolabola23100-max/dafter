@@ -21,7 +21,7 @@ class AppDatabase {
     final path = join(databasePath, 'dafter.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -37,6 +37,9 @@ class AppDatabase {
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE ${DatabaseTables.customers} ADD COLUMN balance REAL NOT NULL DEFAULT 0');
       await db.execute('UPDATE ${DatabaseTables.customers} SET balance = opening_balance WHERE balance = 0 AND opening_balance != 0');
+    }
+    if (oldVersion < 4) {
+      await _createPurchaseReturnTables(db);
     }
   }
 
@@ -55,16 +58,24 @@ class AppDatabase {
     await db.execute('CREATE TABLE ${DatabaseTables.stockMovements} (id TEXT PRIMARY KEY, product_id TEXT NOT NULL, type TEXT NOT NULL, quantity INTEGER NOT NULL, date TEXT NOT NULL, reference_id TEXT, notes TEXT, FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
     await db.execute('CREATE TABLE ${DatabaseTables.accountTransactions} (id TEXT PRIMARY KEY, account_id TEXT NOT NULL, type TEXT NOT NULL, amount REAL NOT NULL, is_debit INTEGER NOT NULL, date TEXT NOT NULL, reference_id TEXT, description TEXT, FOREIGN KEY (account_id) REFERENCES ${DatabaseTables.accounts}(id))');
     await db.execute('CREATE TABLE ${DatabaseTables.transfers} (id TEXT PRIMARY KEY, from_account_id TEXT NOT NULL, to_account_id TEXT NOT NULL, amount REAL NOT NULL, date TEXT NOT NULL, notes TEXT, FOREIGN KEY (from_account_id) REFERENCES ${DatabaseTables.accounts}(id), FOREIGN KEY (to_account_id) REFERENCES ${DatabaseTables.accounts}(id))');
+    await _createPurchaseReturnTables(db);
     await _createIndexes(db);
   }
 
+  Future<void> _createPurchaseReturnTables(Database db) async {
+    await db.execute('CREATE TABLE IF NOT EXISTS ${DatabaseTables.purchaseReturns} (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, supplier_id TEXT, date TEXT NOT NULL, total REAL NOT NULL DEFAULT 0, refunded_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (purchase_id) REFERENCES ${DatabaseTables.purchases}(id), FOREIGN KEY (supplier_id) REFERENCES ${DatabaseTables.suppliers}(id) ON DELETE SET NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS ${DatabaseTables.purchaseReturnItems} (id TEXT PRIMARY KEY, return_id TEXT NOT NULL, purchase_item_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, total REAL NOT NULL DEFAULT 0, FOREIGN KEY (return_id) REFERENCES ${DatabaseTables.purchaseReturns}(id) ON DELETE CASCADE, FOREIGN KEY (purchase_item_id) REFERENCES ${DatabaseTables.purchaseItems}(id), FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
+  }
+
   Future<void> _createIndexes(Database db) async {
-    await db.execute('CREATE INDEX idx_products_barcode ON ${DatabaseTables.products}(barcode)');
-    await db.execute('CREATE INDEX idx_sale_items_sale_id ON ${DatabaseTables.saleItems}(sale_id)');
-    await db.execute('CREATE INDEX idx_sale_items_product_id ON ${DatabaseTables.saleItems}(product_id)');
-    await db.execute('CREATE INDEX idx_purchase_items_purchase_id ON ${DatabaseTables.purchaseItems}(purchase_id)');
-    await db.execute('CREATE INDEX idx_purchase_items_product_id ON ${DatabaseTables.purchaseItems}(product_id)');
-    await db.execute('CREATE INDEX idx_stock_movements_product_id ON ${DatabaseTables.stockMovements}(product_id)');
-    await db.execute('CREATE INDEX idx_account_transactions_account_id ON ${DatabaseTables.accountTransactions}(account_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_products_barcode ON ${DatabaseTables.products}(barcode)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON ${DatabaseTables.saleItems}(sale_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_sale_items_product_id ON ${DatabaseTables.saleItems}(product_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON ${DatabaseTables.purchaseItems}(purchase_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_purchase_items_product_id ON ${DatabaseTables.purchaseItems}(product_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_stock_movements_product_id ON ${DatabaseTables.stockMovements}(product_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_account_transactions_account_id ON ${DatabaseTables.accountTransactions}(account_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_purchase_returns_purchase_id ON ${DatabaseTables.purchaseReturns}(purchase_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_purchase_return_items_return_id ON ${DatabaseTables.purchaseReturnItems}(return_id)');
   }
 }
