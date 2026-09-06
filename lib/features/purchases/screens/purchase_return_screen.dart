@@ -14,9 +14,7 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
 
   final List<ReturnItem> items = [];
 
-  double get total {
-    return items.fold(0, (sum, item) => sum + item.total);
-  }
+  double get total => items.fold(0, (sum, item) => sum + item.total);
 
   @override
   void dispose() {
@@ -30,9 +28,7 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
       context: context,
       builder: (_) => _ReturnItemDialog(
         onAdd: (item) {
-          setState(() {
-            items.add(item);
-          });
+          setState(() => items.add(item));
         },
       ),
     );
@@ -40,17 +36,16 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
 
   void saveReturn() {
     if (invoiceController.text.trim().isEmpty) {
-      _message('أدخل رقم فاتورة الشراء');
+      _message('اكتب رقم فاتورة الشراء');
       return;
     }
-
     if (items.isEmpty) {
-      _message('أضف الأصناف المرتجعة');
+      _message('ضيف الأصناف المرتجعة');
       return;
     }
 
     _message('تم تسجيل المرتجع بنجاح');
-    Navigator.pop(context);
+    Navigator.pop(context, true);
   }
 
   void _message(String message) {
@@ -61,39 +56,36 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8F9),
-      appBar: AppBar(
-        title: const Text('مرتجع شراء'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildInvoiceInfo(),
-
-            const SizedBox(height: 16),
-
-            _buildItems(),
-
-            const SizedBox(height: 16),
-
-            _buildTotal(),
-
-            const SizedBox(height: 20),
-
-            ElevatedButton.icon(
-              onPressed: saveReturn,
-              icon: const Icon(Icons.assignment_return_outlined),
-              label: const Text('تسجيل المرتجع'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F8F9),
+        appBar: AppBar(
+          title: const Text('مرتجع شراء'),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildInvoiceInfo(),
+              const SizedBox(height: 16),
+              _buildItems(),
+              const SizedBox(height: 16),
+              _buildTotal(),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: saveReturn,
+                icon: const Icon(Icons.assignment_return_outlined),
+                label: const Text('تسجيل المرتجع'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -110,20 +102,12 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
               labelText: 'رقم فاتورة الشراء',
               hintText: 'مثال: 1025',
               prefixIcon: const Icon(Icons.receipt_long_outlined),
-              suffixIcon: IconButton(
-                onPressed: () {
-                  _message('سيتم البحث عن الفاتورة');
-                },
-                icon: const Icon(Icons.search),
-              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
-
           const SizedBox(height: 14),
-
           CustomTextFormField(
             controller: supplierController,
             decoration: InputDecoration(
@@ -152,13 +136,9 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
               padding: EdgeInsets.all(35),
               child: Column(
                 children: [
-                  Icon(
-                    Icons.assignment_return_outlined,
-                    size: 45,
-                    color: Colors.grey,
-                  ),
+                  Icon(Icons.assignment_return_outlined, size: 45),
                   SizedBox(height: 10),
-                  Text('لا توجد أصناف مرتجعة'),
+                  Text('لسه مفيش أصناف مرتجعة'),
                 ],
               ),
             )
@@ -166,30 +146,22 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
               children: items.asMap().entries.map((entry) {
                 final index = entry.key;
                 final item = entry.value;
-
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(item.name),
                   subtitle: Text(
-                    '${item.quantity} × ${item.price.toStringAsFixed(2)} ج.م',
+                    '${item.quantity} × ${item.price.toStringAsFixed(2)} جنيه',
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${item.total.toStringAsFixed(2)} ج.م',
+                        '${item.total.toStringAsFixed(2)} جنيه',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       IconButton(
-                        onPressed: () {
-                          setState(() {
-                            items.removeAt(index);
-                          });
-                        },
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
+                        onPressed: () => setState(() => items.removeAt(index)),
+                        icon: const Icon(Icons.delete_outline),
                       ),
                     ],
                   ),
@@ -204,10 +176,10 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
       title: 'إجمالي المرتجع',
       child: Row(
         children: [
-          const Text('قيمة المرتجع', style: TextStyle(fontSize: 15)),
+          const Text('قيمة المرتجع'),
           const Spacer(),
           Text(
-            '${total.toStringAsFixed(2)} ج.م',
+            '${total.toStringAsFixed(2)} جنيه',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
         ],
@@ -254,15 +226,19 @@ class _ReturnItemDialogState extends State<_ReturnItemDialog> {
 
   void add() {
     final name = nameController.text.trim();
-    final price = double.tryParse(priceController.text);
-    final quantity = int.tryParse(quantityController.text);
+    final price = double.tryParse(priceController.text.trim());
+    final quantity = int.tryParse(quantityController.text.trim());
 
-    if (name.isEmpty || price == null || quantity == null || quantity <= 0) {
+    if (name.isEmpty || price == null || price < 0 || quantity == null || quantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('راجع اسم الصنف والسعر والكمية')),
+      );
       return;
     }
 
-    widget.onAdd(ReturnItem(name: name, price: price, quantity: quantity));
-
+    widget.onAdd(
+      ReturnItem(name: name, price: price, quantity: quantity),
+    );
     Navigator.pop(context);
   }
 
@@ -282,7 +258,7 @@ class _ReturnItemDialogState extends State<_ReturnItemDialog> {
             const SizedBox(height: 12),
             CustomTextFormField(
               controller: priceController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'السعر'),
             ),
             const SizedBox(height: 12),
@@ -334,7 +310,7 @@ class _Box extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              ?action,
+              if (action != null) action!,
             ],
           ),
           const SizedBox(height: 18),
