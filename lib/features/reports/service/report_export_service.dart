@@ -45,52 +45,91 @@ class ReportExportService {
     if (location == null) return false;
 
     final excel = Excel.createExcel();
+    final defaultSheet = excel.getDefaultSheet();
+    if (defaultSheet != null && defaultSheet != 'التقرير') {
+      excel.delete(defaultSheet);
+    }
     final sheet = excel['التقرير'];
-    sheet.appendRow([TextCellValue('تقرير دفتر')]);
-    sheet.appendRow([TextCellValue('الفترة'), TextCellValue(period)]);
-    sheet.appendRow([TextCellValue('نوع التقرير'), TextCellValue(report)]);
-    sheet.appendRow([TextCellValue('')]);
+
+    sheet.appendRow([
+      TextCellValue('تقرير دفتر'),
+      TextCellValue(''),
+      TextCellValue(''),
+    ]);
+    sheet.appendRow([
+      TextCellValue('الفترة'),
+      TextCellValue(period),
+      TextCellValue(''),
+    ]);
+    sheet.appendRow([
+      TextCellValue('نوع التقرير'),
+      TextCellValue(report),
+      TextCellValue(''),
+    ]);
+    sheet.appendRow([TextCellValue(''), TextCellValue(''), TextCellValue('')]);
     sheet.appendRow([
       TextCellValue('البند'),
       TextCellValue('العدد'),
       TextCellValue('القيمة'),
     ]);
-    _appendExcelRow(sheet, 'المبيعات', summary.salesCount, summary.salesTotal);
-    _appendExcelRow(
-      sheet,
-      'مرتجعات البيع',
-      summary.salesReturnsCount,
-      summary.salesReturnsTotal,
-    );
-    _appendExcelRow(sheet, 'صافي المبيعات', null, summary.netSales);
-    _appendExcelRow(
-      sheet,
-      'المشتريات',
-      summary.purchasesCount,
-      summary.purchasesTotal,
-    );
-    _appendExcelRow(
-      sheet,
-      'مرتجعات الشراء',
-      summary.purchaseReturnsCount,
-      summary.purchaseReturnsTotal,
-    );
-    _appendExcelRow(sheet, 'صافي المشتريات', null, summary.netPurchases);
-    _appendExcelRow(
-      sheet,
-      'المصروفات',
-      summary.expensesCount,
-      summary.expensesTotal,
-    );
-    _appendExcelRow(sheet, 'الصافي', null, summary.net);
-    _appendExcelRow(sheet, 'قيمة المخزون', null, summary.stockValue);
-    _appendExcelRow(sheet, 'المنتجات', summary.productsCount, null);
-    _appendExcelRow(sheet, 'الموردين', summary.suppliersCount, null);
-    _appendExcelRow(sheet, 'العملاء', summary.customersCount, null);
+
+    switch (report) {
+      case 'المبيعات':
+        _appendExcelRow(sheet, 'المبيعات', summary.salesCount, summary.salesTotal);
+        _appendExcelRow(sheet, 'مرتجعات البيع', summary.salesReturnsCount, summary.salesReturnsTotal);
+        _appendExcelRow(sheet, 'صافي المبيعات', null, summary.netSales);
+        break;
+      case 'المشتريات':
+        _appendExcelRow(sheet, 'المشتريات', summary.purchasesCount, summary.purchasesTotal);
+        _appendExcelRow(sheet, 'مرتجعات الشراء', summary.purchaseReturnsCount, summary.purchaseReturnsTotal);
+        _appendExcelRow(sheet, 'صافي المشتريات', null, summary.netPurchases);
+        break;
+      case 'المصروفات':
+        _appendExcelRow(sheet, 'المصروفات', summary.expensesCount, summary.expensesTotal);
+        break;
+      case 'المخزون':
+        _appendExcelRow(sheet, 'قيمة المخزون', null, summary.stockValue);
+        _appendExcelRow(sheet, 'المنتجات', summary.productsCount, null);
+        break;
+      case 'الأرباح':
+        _appendExcelRow(sheet, 'صافي المبيعات', null, summary.netSales);
+        _appendExcelRow(sheet, 'صافي المشتريات', null, summary.netPurchases);
+        _appendExcelRow(sheet, 'المصروفات', summary.expensesCount, summary.expensesTotal);
+        _appendExcelRow(sheet, 'الصافي', null, summary.net);
+        break;
+      case 'كل التقارير':
+      default:
+        _appendExcelRow(sheet, 'المبيعات', summary.salesCount, summary.salesTotal);
+        _appendExcelRow(sheet, 'مرتجعات البيع', summary.salesReturnsCount, summary.salesReturnsTotal);
+        _appendExcelRow(sheet, 'صافي المبيعات', null, summary.netSales);
+        _appendExcelRow(sheet, 'المشتريات', summary.purchasesCount, summary.purchasesTotal);
+        _appendExcelRow(sheet, 'مرتجعات الشراء', summary.purchaseReturnsCount, summary.purchaseReturnsTotal);
+        _appendExcelRow(sheet, 'صافي المشتريات', null, summary.netPurchases);
+        _appendExcelRow(sheet, 'المصروفات', summary.expensesCount, summary.expensesTotal);
+        _appendExcelRow(sheet, 'الصافي', null, summary.net);
+        _appendExcelRow(sheet, 'قيمة المخزون', null, summary.stockValue);
+        _appendExcelRow(sheet, 'المنتجات', summary.productsCount, null);
+        _appendExcelRow(sheet, 'الموردين', summary.suppliersCount, null);
+        _appendExcelRow(sheet, 'العملاء', summary.customersCount, null);
+        break;
+    }
+
+    // Make the exported workbook readable when opened in Excel.
+    for (final cell in sheet.rows.expand((row) => row)) {
+      cell?.cellStyle = CellStyle(
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+      );
+    }
 
     final data = excel.encode();
-    if (data == null) return false;
-    await File(location.path).writeAsBytes(data, flush: true);
+    if (data == null || data.isEmpty) return false;
+
+    await XFile.fromData(
+      Uint8List.fromList(data),
+      name: 'تقرير_دفتر.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ).saveTo(location.path);
     return true;
   }
 
@@ -176,11 +215,7 @@ class ReportExportService {
       ['مرتجعات البيع', '${s.salesReturnsCount}', _money(s.salesReturnsTotal)],
       ['صافي المبيعات', '', _money(s.netSales)],
       ['المشتريات', '${s.purchasesCount}', _money(s.purchasesTotal)],
-      [
-        'مرتجعات الشراء',
-        '${s.purchaseReturnsCount}',
-        _money(s.purchaseReturnsTotal),
-      ],
+      ['مرتجعات الشراء', '${s.purchaseReturnsCount}', _money(s.purchaseReturnsTotal)],
       ['صافي المشتريات', '', _money(s.netPurchases)],
       ['المصروفات', '${s.expensesCount}', _money(s.expensesTotal)],
       ['الصافي', '', _money(s.net)],
