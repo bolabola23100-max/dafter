@@ -12,7 +12,6 @@ Future<void> main() async {
   await windowManager.setPreventClose(true);
 
   await AppDatabase.instance.database;
-  // If the user has selected a backup folder, keep a daily SQLite backup there.
   await BackupService.instance.backupDatabase();
 
   runApp(const DafterApp());
@@ -52,14 +51,8 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
         title: const Text('قبل ما تقفل دفتر'),
         content: const Text('تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseAction.cancel),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseAction.closeWithoutBackup),
-            child: const Text('إغلاق بدون نسخة'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, _CloseAction.cancel), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(context, _CloseAction.closeWithoutBackup), child: const Text('إغلاق بدون نسخة')),
           FilledButton.icon(
             onPressed: () => Navigator.pop(context, _CloseAction.backupAndClose),
             icon: const Icon(Icons.backup_outlined),
