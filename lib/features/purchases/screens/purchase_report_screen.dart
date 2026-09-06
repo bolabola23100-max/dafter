@@ -1,4 +1,5 @@
 import 'package:dafter/features/model/purchase.dart';
+import 'package:dafter/features/model/supplier.dart';
 import 'package:dafter/features/purchases/repo/purchase_repository.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
 import 'package:flutter/material.dart';
@@ -29,12 +30,13 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   Future<void> _loadData() async {
     setState(() => _loading = true);
     try {
-      final results = await Future.wait([
+      final results = await Future.wait<Object>([
         _purchaseRepository.getPurchases(),
         _supplierRepository.getSuppliers(),
       ]);
       final purchases = results[0] as List<Purchase>;
-      final suppliers = results[1];
+      final suppliers = results[1] as List<Supplier>;
+
       if (!mounted) return;
       setState(() {
         _purchases = purchases;
@@ -67,9 +69,12 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     }).toList();
   }
 
-  double get _total => _filteredPurchases.fold(0, (sum, item) => sum + item.total);
-  double get _paid => _filteredPurchases.fold(0, (sum, item) => sum + item.paidAmount);
-  double get _remaining => _filteredPurchases.fold(0, (sum, item) => sum + item.remainingAmount);
+  double get _total =>
+      _filteredPurchases.fold(0, (sum, item) => sum + item.total);
+  double get _paid =>
+      _filteredPurchases.fold(0, (sum, item) => sum + item.paidAmount);
+  double get _remaining =>
+      _filteredPurchases.fold(0, (sum, item) => sum + item.remainingAmount);
 
   @override
   void dispose() {
@@ -78,7 +83,9 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -122,11 +129,19 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   Widget _buildSummary() {
     return Row(
       children: [
-        Expanded(child: _stat('إجمالي المشتريات', _total, Icons.shopping_bag_outlined)),
+        Expanded(
+          child: _stat(
+            'إجمالي المشتريات',
+            _total,
+            Icons.shopping_bag_outlined,
+          ),
+        ),
         const SizedBox(width: 14),
         Expanded(child: _stat('المدفوع', _paid, Icons.payments_outlined)),
         const SizedBox(width: 14),
-        Expanded(child: _stat('المستحق', _remaining, Icons.money_off_outlined)),
+        Expanded(
+          child: _stat('المستحق', _remaining, Icons.money_off_outlined),
+        ),
       ],
     );
   }
@@ -146,8 +161,17 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${value.toStringAsFixed(2)} ج.م', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              Text(
+                '${value.toStringAsFixed(2)} ج.م',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                title,
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
             ],
           ),
         ],
@@ -227,29 +251,53 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
               itemCount: purchases.length,
               itemBuilder: (_, index) {
                 final purchase = purchases[index];
-                final supplier = _supplierNames[purchase.supplierId] ?? 'بدون مورد';
+                final supplier =
+                    _supplierNames[purchase.supplierId] ?? 'بدون مورد';
                 final remaining = purchase.remainingAmount;
                 return Container(
                   padding: const EdgeInsets.all(15),
                   decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: Color(0xFFF0F1F2))),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFF0F1F2)),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Expanded(child: Text('#${purchase.id}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                      Expanded(
+                        child: Text(
+                          '#${purchase.id}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
                       Expanded(flex: 2, child: Text(supplier)),
-                      Expanded(child: Text('${purchase.total.toStringAsFixed(2)} ج.م')),
-                      Expanded(child: Text('${purchase.paidAmount.toStringAsFixed(2)} ج.م')),
+                      Expanded(
+                        child: Text('${purchase.total.toStringAsFixed(2)} ج.م'),
+                      ),
+                      Expanded(
+                        child: Text(
+                          '${purchase.paidAmount.toStringAsFixed(2)} ج.م',
+                        ),
+                      ),
                       Expanded(
                         child: Text(
                           '${remaining.toStringAsFixed(2)} ج.م',
                           style: TextStyle(
-                            color: remaining <= 0.009 ? Colors.green : Colors.red,
+                            color: remaining <= 0.009
+                                ? Colors.green
+                                : Colors.red,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                      Expanded(child: Text(_formatDate(purchase.date), style: const TextStyle(color: Colors.grey, fontSize: 12))),
+                      Expanded(
+                        child: Text(
+                          _formatDate(purchase.date),
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -266,11 +314,22 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey),
+          const Icon(
+            Icons.receipt_long_outlined,
+            size: 64,
+            color: Colors.grey,
+          ),
           const SizedBox(height: 12),
-          const Text('مفيش فواتير مشتريات', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'مفيش فواتير مشتريات',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 6),
-          Text(_searchController.text.isEmpty && _filter == 'الكل' ? 'لما تضيف أول فاتورة هتظهر هنا.' : 'جرّب تغيّر البحث أو الفلتر.'),
+          Text(
+            _searchController.text.isEmpty && _filter == 'الكل'
+                ? 'لما تضيف أول فاتورة هتظهر هنا.'
+                : 'جرّب تغيّر البحث أو الفلتر.',
+          ),
         ],
       ),
     );
