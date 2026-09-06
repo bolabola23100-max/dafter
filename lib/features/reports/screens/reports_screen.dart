@@ -229,6 +229,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : ReportsTable(
+                    reportType: selectedReport,
                     salesCount: _summary.salesCount,
                     salesTotal: _summary.salesTotal,
                     purchasesCount: _summary.purchasesCount,
