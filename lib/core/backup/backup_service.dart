@@ -10,11 +10,14 @@ class BackupService {
   BackupService._();
 
   Future<String?> getBackupDirectory() async {
-    final file = File(p.join(await getDatabasesPath(), 'dafter_backup_settings.json'));
+    final file = File(
+      p.join(await getDatabasesPath(), 'dafter_backup_settings.json'),
+    );
     if (!await file.exists()) return null;
 
     try {
-      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final data =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final path = data['directory'] as String?;
       if (path == null || path.trim().isEmpty) return null;
       return Directory(path).existsSync() ? path : null;
@@ -24,7 +27,9 @@ class BackupService {
   }
 
   Future<bool> chooseBackupDirectory() async {
-    final directory = await getDirectoryPath(confirmButtonText: 'اختيار المجلد');
+    final directory = await getDirectoryPath(
+      confirmButtonText: 'اختيار المجلد',
+    );
     if (directory == null) return false;
     await _saveDirectory(directory);
     return true;
@@ -55,11 +60,13 @@ class BackupService {
   }
 
   Future<void> _saveDirectory(String directory) async {
-    final settingsPath = p.join(await getDatabasesPath(), 'dafter_backup_settings.json');
-    await File(settingsPath).writeAsString(
-      jsonEncode({'directory': directory}),
-      flush: true,
+    final settingsPath = p.join(
+      await getDatabasesPath(),
+      'dafter_backup_settings.json',
     );
+    await File(
+      settingsPath,
+    ).writeAsString(jsonEncode({'directory': directory}), flush: true);
   }
 
   String _date(DateTime value) =>
