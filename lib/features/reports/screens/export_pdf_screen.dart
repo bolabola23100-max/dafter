@@ -1,6 +1,7 @@
 import 'package:dafter/features/reports/service/report_export_service.dart';
 import 'package:dafter/features/reports/service/report_service.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 class ExportPdfScreen extends StatefulWidget {
   const ExportPdfScreen({super.key});
@@ -52,13 +53,18 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
     }
   }
 
+  Future<({dynamic summary, (DateTime, DateTime) range})> _loadReport() async {
+    final range = _periodRange(selectedPeriod);
+    final summary = await _reportService.getSummary(from: range.$1, to: range.$2);
+    return (summary: summary, range: range);
+  }
+
   Future<void> _exportPdf() async {
     setState(() => _loading = true);
     try {
-      final range = _periodRange(selectedPeriod);
-      final summary = await _reportService.getSummary(from: range.$1, to: range.$2);
+      final loaded = await _loadReport();
       final saved = await _exportService.exportPdf(
-        summary: summary,
+        summary: loaded.summary,
         period: selectedPeriod,
         report: selectedReport,
       );
@@ -72,6 +78,40 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('حصلت مشكلة وإحنا بنصدر التقرير')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _previewPdf() async {
+    setState(() => _loading = true);
+    try {
+      final loaded = await _loadReport();
+      final bytes = await _exportService.buildPdf(
+        summary: loaded.summary,
+        period: selectedPeriod,
+        report: selectedReport,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('معاينة التقرير')),
+            body: PdfPreview(
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              allowPrinting: true,
+              allowSharing: true,
+              build: (_) async => bytes,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('حصلت مشكلة وإحنا بنجهز المعاينة')),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -122,13 +162,32 @@ class _ExportPdfScreenState extends State<ExportPdfScreen> {
                 const SizedBox(height: 20),
                 _dropdown(title: 'الفترة', value: selectedPeriod, items: periods, onChanged: (value) => setState(() => selectedPeriod = value!)),
                 const SizedBox(height: 30),
-                ElevatedButton.icon(
-                  onPressed: _loading ? null : _exportPdf,
-                  icon: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.download),
-                  label: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Text(_loading ? 'جاري التصدير...' : 'حفظ PDF', style: const TextStyle(fontSize: 16)),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _loading ? null : _previewPdf,
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: Text('معاينة'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _loading ? null : _exportPdf,
+                        icon: _loading
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.download),
+                        label: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text(_loading ? 'جاري التجهيز...' : 'حفظ PDF'),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
