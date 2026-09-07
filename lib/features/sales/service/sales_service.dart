@@ -41,9 +41,16 @@ class SalesService {
 
   Future<void> createSale({required Sale sale, String? accountId}) async {
     if (sale.items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
+    if (sale.discount < 0 || sale.discount > sale.subtotal) {
+      throw Exception('الخصم غير صحيح');
+    }
     if (sale.total < 0) throw Exception('إجمالي الفاتورة مينفعش يكون بالسالب');
     if (sale.paidAmount < 0 || sale.paidAmount > sale.total) {
       throw Exception('المبلغ المدفوع غير صحيح');
+    }
+    final remaining = sale.remainingAmount < 0 ? 0 : sale.remainingAmount;
+    if (remaining > 0 && sale.customerId == null) {
+      throw Exception('أي مبلغ متبقي من الفاتورة لازم يتسجل على عميل');
     }
 
     final db = await _database.database;
@@ -64,7 +71,9 @@ class SalesService {
       final requestedQuantities = <String, int>{};
       for (final item in sale.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
-        if (item.subtotal < 0) throw Exception('سعر أو خصم الصنف غير صحيح');
+        if (item.price < 0 || item.subtotal < 0) {
+          throw Exception('سعر المنتج غير صحيح');
+        }
         requestedQuantities.update(
           item.productId,
           (quantity) => quantity + item.quantity,
@@ -100,7 +109,6 @@ class SalesService {
         );
       }
 
-      final remaining = sale.remainingAmount < 0 ? 0 : sale.remainingAmount;
       if (sale.customerId != null && remaining > 0) {
         final customer = await _customerRepository.getCustomerByIdWithExecutor(txn, sale.customerId!);
         if (customer == null) throw Exception('العميل غير موجود');
