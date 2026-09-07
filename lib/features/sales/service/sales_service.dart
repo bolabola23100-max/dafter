@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Inventory/repositories/stock_movement_repository.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
@@ -29,6 +30,7 @@ class SalesService {
     StockMovementRepository? stockMovementRepository,
     PaymentRepository? paymentRepository,
     AccountRepository? accountRepository,
+    PaymentRepository? paymentRepository,
     AccountTransactionRepository? accountTransactionRepository,
   }) : _database = database ?? AppDatabase.instance,
        _salesRepository = salesRepository ?? SalesRepository(),
@@ -82,7 +84,7 @@ class SalesService {
         if (product == null) throw Exception('المنتج غير موجود');
         await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity - item.quantity);
         await _stockMovementRepository.addMovementWithExecutor(txn, StockMovement(
-          id: _generateId(), productId: product.id, type: StockMovementType.sale,
+          id: IdGenerator.generate(), productId: product.id, type: StockMovementType.sale,
           quantity: -item.quantity, date: sale.date, referenceId: sale.id, notes: 'فاتورة بيع',
         ));
       }
@@ -95,17 +97,15 @@ class SalesService {
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
         if (account == null) throw Exception('الحساب غير موجود');
         await _paymentRepository.addPaymentWithExecutor(txn, Payment(
-          id: _generateId(), type: PaymentType.receipt, personId: sale.customerId,
+          id: IdGenerator.generate(), type: PaymentType.receipt, personId: sale.customerId,
           accountId: account.id, amount: sale.paidAmount, date: sale.date, notes: 'قبض فاتورة بيع',
         ));
         await _accountTransactionRepository.addTransactionWithExecutor(txn, AccountTransaction(
-          id: _generateId(), accountId: account.id, type: TransactionType.receipt,
+          id: IdGenerator.generate(), accountId: account.id, type: TransactionType.receipt,
           amount: sale.paidAmount, isDebit: false, date: sale.date, referenceId: sale.id, description: 'قبض فاتورة بيع',
         ));
         await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance + sale.paidAmount);
       }
     });
   }
-
-  String _generateId() => DateTime.now().microsecondsSinceEpoch.toString();
 }
