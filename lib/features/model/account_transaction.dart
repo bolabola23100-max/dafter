@@ -10,19 +10,12 @@ enum TransactionType {
 
 class AccountTransaction {
   final String id;
-
   final String accountId;
-
   final TransactionType type;
-
   final double amount;
-
   final bool isDebit;
-
   final DateTime date;
-
   final String? referenceId;
-
   final String? description;
 
   AccountTransaction({
@@ -34,5 +27,5 @@ class AccountTransaction {
     required this.date,
     this.referenceId,
     this.description,
-  });
+  }) : assert(amount > 0, 'Transaction amount must be greater than zero');
 }
