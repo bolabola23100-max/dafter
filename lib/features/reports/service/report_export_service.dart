@@ -8,8 +8,14 @@ import 'package:excel/excel.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class ReportExportService {
+  ReportExportService({AppDatabase? database})
+      : _database = database ?? AppDatabase.instance;
+
+  final AppDatabase _database;
+
   Future<bool> exportPdf({
     required ReportSummary summary,
     required String period,
@@ -21,10 +27,26 @@ class ReportExportService {
     );
     if (location == null) return false;
 
-    final details = await _loadDetails(period);
-    final bytes = await _buildPdf(summary, period, report, details);
-    await XFile.fromData(bytes, name: 'تقرير_دفتر.pdf', mimeType: 'application/pdf').saveTo(location.path);
+    final bytes = await buildPdf(
+      summary: summary,
+      period: period,
+      report: report,
+    );
+    await XFile.fromData(
+      bytes,
+      name: 'تقرير_دفتر.pdf',
+      mimeType: 'application/pdf',
+    ).saveTo(location.path);
     return true;
+  }
+
+  Future<Uint8List> buildPdf({
+    required ReportSummary summary,
+    required String period,
+    String report = 'كل التقارير',
+  }) async {
+    final details = await _loadDetails(period);
+    return _buildPdf(summary, period, report, details);
   }
 
   Future<bool> exportExcel({
@@ -44,7 +66,6 @@ class ReportExportService {
     if (defaultSheet != null) excel.delete(defaultSheet);
 
     _addSummarySheet(excel, summary, period, report);
-
     if (_includes(report, 'المبيعات')) _addSheet(excel, 'المبيعات', details.sales, ['رقم الفاتورة', 'التاريخ', 'العميل', 'الإجمالي قبل الخصم', 'الخصم', 'الإجمالي', 'المدفوع', 'المتبقي', 'ملاحظات']);
     if (_includes(report, 'المشتريات')) _addSheet(excel, 'المشتريات', details.purchases, ['رقم الفاتورة', 'التاريخ', 'المورد', 'الإجمالي قبل الخصم', 'الخصم', 'الإجمالي', 'المدفوع', 'المتبقي', 'ملاحظات']);
     if (_includes(report, 'المصروفات')) _addSheet(excel, 'المصروفات', details.expenses, ['التاريخ', 'نوع المصروف', 'الحساب', 'المبلغ', 'ملاحظات']);
@@ -119,7 +140,7 @@ class ReportExportService {
   }
 
   Future<_ReportDetails> _loadDetails(String period) async {
-    final db = await AppDatabase.instance.database;
+    final db = await _database.database;
     final range = _periodRange(period);
     final args = [range.$1.toIso8601String(), range.$2.toIso8601String()];
 
@@ -131,7 +152,6 @@ class ReportExportService {
       LEFT JOIN ${DatabaseTables.customers} c ON c.id = s.customer_id
       WHERE s.date >= ? AND s.date < ? ORDER BY s.date DESC
     ''', args);
-
     final purchases = await db.rawQuery('''
       SELECT p.id, p.date, COALESCE(s.name, 'بدون مورد') supplier_name,
              p.subtotal, p.discount, p.total, p.paid_amount,
@@ -140,7 +160,6 @@ class ReportExportService {
       LEFT JOIN ${DatabaseTables.suppliers} s ON s.id = p.supplier_id
       WHERE p.date >= ? AND p.date < ? ORDER BY p.date DESC
     ''', args);
-
     final expenses = await db.rawQuery('''
       SELECT e.date, e.category, COALESCE(a.name, 'حساب محذوف') account_name,
              e.amount, COALESCE(e.notes, '') notes
@@ -148,7 +167,6 @@ class ReportExportService {
       LEFT JOIN ${DatabaseTables.accounts} a ON a.id = e.account_id
       WHERE e.date >= ? AND e.date < ? ORDER BY e.date DESC
     ''', args);
-
     final saleReturns = await db.rawQuery('''
       SELECT r.id, r.date, r.sale_id, COALESCE(c.name, 'عميل نقدي') customer_name,
              r.total, r.refunded_amount, COALESCE(r.notes, '') notes
@@ -156,7 +174,6 @@ class ReportExportService {
       LEFT JOIN ${DatabaseTables.customers} c ON c.id = r.customer_id
       WHERE r.date >= ? AND r.date < ? ORDER BY r.date DESC
     ''', args);
-
     final purchaseReturns = await db.rawQuery('''
       SELECT r.id, r.date, r.purchase_id, COALESCE(s.name, 'بدون مورد') supplier_name,
              r.total, r.refunded_amount, COALESCE(r.notes, '') notes
@@ -164,7 +181,6 @@ class ReportExportService {
       LEFT JOIN ${DatabaseTables.suppliers} s ON s.id = r.supplier_id
       WHERE r.date >= ? AND r.date < ? ORDER BY r.date DESC
     ''', args);
-
     final stock = await db.rawQuery('''
       SELECT name, COALESCE(barcode, '') barcode, quantity, min_quantity,
              purchase_price, selling_price, (quantity * purchase_price) stock_value
@@ -197,22 +213,11 @@ class ReportExportService {
 
   Future<Uint8List> _buildPdf(ReportSummary s, String period, String report, _ReportDetails details) async {
     final document = pw.Document();
-    pw.Font? regular;
-    pw.Font? bold;
-    const fontPaths = ['C:\\Windows\\Fonts\\arial.ttf', 'C:\\Windows\\Fonts\\tahoma.ttf'];
-    const boldPaths = ['C:\\Windows\\Fonts\\arialbd.ttf', 'C:\\Windows\\Fonts\\tahomabd.ttf'];
-    for (final path in fontPaths) {
-      final file = File(path);
-      if (await file.exists()) { final bytes = await file.readAsBytes(); regular = pw.Font.ttf(ByteData.view(bytes.buffer)); break; }
-    }
-    for (final path in boldPaths) {
-      final file = File(path);
-      if (await file.exists()) { final bytes = await file.readAsBytes(); bold = pw.Font.ttf(ByteData.view(bytes.buffer)); break; }
-    }
+    final font = await _loadOfflineArabicFont();
 
     document.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
-      theme: pw.ThemeData.withFont(base: regular, bold: bold),
+      theme: pw.ThemeData.withFont(base: font, bold: font),
       build: (_) => [
         pw.Directionality(
           textDirection: pw.TextDirection.rtl,
@@ -237,6 +242,38 @@ class ReportExportService {
       ],
     ));
     return document.save();
+  }
+
+  Future<pw.Font> _loadOfflineArabicFont() async {
+    final candidates = <String>[];
+    if (Platform.isWindows) {
+      candidates.addAll([
+        r'C:\Windows\Fonts\tahoma.ttf',
+        r'C:\Windows\Fonts\arial.ttf',
+      ]);
+    } else if (Platform.isLinux) {
+      candidates.addAll([
+        '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
+        '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
+      ]);
+    } else if (Platform.isMacOS) {
+      candidates.addAll([
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        '/System/Library/Fonts/Supplemental/Tahoma.ttf',
+      ]);
+    }
+
+    for (final path in candidates) {
+      final file = File(path);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        return pw.Font.ttf(ByteData.view(bytes.buffer));
+      }
+    }
+
+    throw StateError(
+      'لم يتم العثور على خط عربي محلي. تأكد من وجود Tahoma أو Arial في Windows.',
+    );
   }
 
   pw.Widget _pdfSummary(ReportSummary s) => _pdfDetailTable(

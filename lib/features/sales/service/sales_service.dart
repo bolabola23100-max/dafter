@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Inventory/repositories/stock_movement_repository.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
@@ -7,6 +8,7 @@ import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
+import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/model/stock_movement.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
@@ -58,7 +60,9 @@ class SalesService {
         final customer = await _customerRepository.getCustomerByIdWithExecutor(txn, sale.customerId!);
         if (customer == null) throw Exception('العميل غير موجود');
       }
+
       final requestedQuantities = <String, int>{};
+      final productsById = <String, Product>{};
       for (final item in sale.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
         if (item.price < 0 || item.discount < 0 || item.discount > item.quantity * item.price) {
@@ -70,19 +74,22 @@ class SalesService {
         final product = await _productRepository.getProductByIdWithExecutor(txn, entry.key);
         if (product == null) throw Exception('المنتج غير موجود');
         if (product.quantity < entry.value) throw Exception('الكمية مش مكفية من: ${product.name}');
+        productsById[product.id] = product;
       }
       for (final item in sale.items) {
-        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        final product = productsById[item.productId];
         if (product == null) throw Exception('المنتج غير موجود');
         item.costPrice = product.purchasePrice;
       }
+
       await _salesRepository.addSaleWithExecutor(txn, sale);
       for (final item in sale.items) {
-        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        final product = productsById[item.productId];
         if (product == null) throw Exception('المنتج غير موجود');
         await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity - item.quantity);
+        product.quantity -= item.quantity;
         await _stockMovementRepository.addMovementWithExecutor(txn, StockMovement(
-          id: _generateId(), productId: product.id, type: StockMovementType.sale,
+          id: IdGenerator.generate(), productId: product.id, type: StockMovementType.sale,
           quantity: -item.quantity, date: sale.date, referenceId: sale.id, notes: 'فاتورة بيع',
         ));
       }
@@ -95,17 +102,15 @@ class SalesService {
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
         if (account == null) throw Exception('الحساب غير موجود');
         await _paymentRepository.addPaymentWithExecutor(txn, Payment(
-          id: _generateId(), type: PaymentType.receipt, personId: sale.customerId,
+          id: IdGenerator.generate(), type: PaymentType.receipt, personId: sale.customerId,
           accountId: account.id, amount: sale.paidAmount, date: sale.date, notes: 'قبض فاتورة بيع',
         ));
         await _accountTransactionRepository.addTransactionWithExecutor(txn, AccountTransaction(
-          id: _generateId(), accountId: account.id, type: TransactionType.receipt,
+          id: IdGenerator.generate(), accountId: account.id, type: TransactionType.receipt,
           amount: sale.paidAmount, isDebit: false, date: sale.date, referenceId: sale.id, description: 'قبض فاتورة بيع',
         ));
         await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance + sale.paidAmount);
       }
     });
   }
-
-  String _generateId() => DateTime.now().microsecondsSinceEpoch.toString();
 }

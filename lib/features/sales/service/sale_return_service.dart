@@ -49,9 +49,8 @@ class SaleReturnService {
     String? accountId,
   }) async {
     if (saleReturn.items.isEmpty) throw Exception('اختار صنف واحد على الأقل');
-    if (saleReturn.total <= 0) throw Exception('قيمة المرتجع لازم تكون أكبر من صفر');
-    if (saleReturn.refundedAmount < 0 || saleReturn.refundedAmount > saleReturn.total) {
-      throw Exception('المبلغ اللي هيترد للعميل غير صحيح');
+    if (saleReturn.refundedAmount < 0) {
+      throw Exception('المبلغ اللي هيترد للعميل مينفعش يكون سالب');
     }
     if (saleReturn.refundedAmount > 0 && (accountId == null || accountId.isEmpty)) {
       throw Exception('اختار الحساب اللي هتطلع منه فلوس المرتجع');
@@ -72,6 +71,11 @@ class SaleReturnService {
         if (customer == null) throw Exception('العميل مش موجود');
       }
 
+      final saleSubtotal = sale.subtotal;
+      final invoiceDiscountFactor = saleSubtotal > 0
+          ? ((saleSubtotal - sale.discount) / saleSubtotal).clamp(0.0, 1.0).toDouble()
+          : 1.0;
+
       final refundRows = await txn.rawQuery(
         'SELECT COALESCE(SUM(refunded_amount), 0) AS refunded_amount '
         'FROM ${DatabaseTables.saleReturns} WHERE sale_id = ?',
@@ -83,20 +87,6 @@ class SaleReturnService {
       final refundableAmount = (sale.paidAmount - previouslyRefunded)
           .clamp(0.0, double.infinity)
           .toDouble();
-      if (saleReturn.refundedAmount > refundableAmount) {
-        throw Exception(
-          'المبلغ اللي هيترد للعميل أكبر من المبلغ المدفوع فعليًا في الفاتورة. '
-          'المتاح للرد: ${refundableAmount.toStringAsFixed(2)}',
-        );
-      }
-
-      if (saleReturn.refundedAmount > 0) {
-        final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
-        if (account == null) throw Exception('الحساب مش موجود');
-        if (account.balance < saleReturn.refundedAmount) {
-          throw Exception('رصيد الحساب مش مكفي عشان ترجع الفلوس');
-        }
-      }
 
       final itemIds = saleReturn.items.map((item) => item.saleItemId).toList();
       final placeholders = List.filled(itemIds.length, '?').join(',');
@@ -112,6 +102,7 @@ class SaleReturnService {
           row['sale_item_id'] as String: (row['returned_quantity'] as num).toInt(),
       };
 
+      final adjustedItems = <SaleReturnItem>[];
       for (final item in saleReturn.items) {
         if (item.quantity <= 0) throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
         final saleItemRows = await txn.query(
@@ -123,19 +114,70 @@ class SaleReturnService {
         if (saleItemRows.isEmpty) throw Exception('صنف المرتجع مش موجود في الفاتورة');
 
         final saleItem = saleItemRows.first;
-        final purchasedQuantity = saleItem['quantity'] as int;
+        final soldQuantity = saleItem['quantity'] as int;
         final alreadyReturned = returnedByItem[item.saleItemId] ?? 0;
-        if (alreadyReturned + item.quantity > purchasedQuantity) {
+        if (alreadyReturned + item.quantity > soldQuantity) {
           throw Exception('الكمية المرتجعة أكبر من الكمية اللي اتباعت');
         }
         if (saleItem['product_id'] as String != item.productId) {
           throw Exception('بيانات المنتج في المرتجع مش مطابقة للفاتورة');
         }
+
+        final lineGross = (saleItem['price'] as num).toDouble() * soldQuantity;
+        final lineDiscount = (saleItem['discount'] as num).toDouble();
+        final lineNet = (lineGross - lineDiscount).clamp(0.0, double.infinity).toDouble();
+        final effectiveUnitPrice = soldQuantity > 0
+            ? (lineNet / soldQuantity) * invoiceDiscountFactor
+            : 0.0;
+
+        adjustedItems.add(
+          SaleReturnItem(
+            id: item.id,
+            returnId: saleReturn.id,
+            saleItemId: item.saleItemId,
+            productId: item.productId,
+            quantity: item.quantity,
+            price: effectiveUnitPrice,
+          ),
+        );
       }
 
-      await _returnRepository.addReturnWithExecutor(txn, saleReturn);
+      final adjustedTotal = adjustedItems.fold<double>(
+        0,
+        (sum, item) => sum + item.total,
+      );
+      if (adjustedTotal <= 0) throw Exception('قيمة المرتجع لازم تكون أكبر من صفر');
+      if (saleReturn.refundedAmount > adjustedTotal) {
+        throw Exception('المبلغ اللي هيترد للعميل أكبر من قيمة المرتجع');
+      }
+      if (saleReturn.refundedAmount > refundableAmount) {
+        throw Exception(
+          'المبلغ اللي هيترد للعميل أكبر من المبلغ المدفوع فعليًا في الفاتورة. '
+          'المتاح للرد: ${refundableAmount.toStringAsFixed(2)}',
+        );
+      }
 
-      for (final item in saleReturn.items) {
+      if (saleReturn.refundedAmount > 0) {
+        final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
+        if (account == null) throw Exception('الحساب مش موجود');
+        if (account.balance < saleReturn.refundedAmount) {
+          throw Exception('رصيد الحساب مش مكفي عشان ترجع الفلوس');
+        }
+      }
+
+      final adjustedReturn = SaleReturn(
+        id: saleReturn.id,
+        saleId: saleReturn.saleId,
+        customerId: customerId,
+        date: saleReturn.date,
+        items: adjustedItems,
+        refundedAmount: saleReturn.refundedAmount,
+        notes: saleReturn.notes,
+      );
+
+      await _returnRepository.addReturnWithExecutor(txn, adjustedReturn);
+
+      for (final item in adjustedItems) {
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج مش موجود');
         await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity + item.quantity);
@@ -146,24 +188,27 @@ class SaleReturnService {
             productId: product.id,
             type: StockMovementType.saleReturn,
             quantity: item.quantity,
-            date: saleReturn.date,
-            referenceId: saleReturn.id,
+            date: adjustedReturn.date,
+            referenceId: adjustedReturn.id,
             notes: 'مرتجع فاتورة بيع',
           ),
         );
       }
 
-      if (customerId != null && saleReturn.creditAmount > 0) {
+      final creditAmount = adjustedTotal - adjustedReturn.refundedAmount;
+      if (customerId != null && creditAmount > 0) {
         final customer = await _customerRepository.getCustomerByIdWithExecutor(txn, customerId);
         if (customer == null) throw Exception('العميل مش موجود');
-        final newBalance = customer.balance - saleReturn.creditAmount;
-        if (newBalance < 0) {
-          throw Exception('قيمة المرتجع أكبر من المبلغ المستحق على العميل');
-        }
-        await _customerRepository.updateBalanceWithExecutor(txn, customer.id, newBalance);
+        // A negative balance is a valid customer credit: the store owes the
+        // customer after a return when the original invoice was already paid.
+        await _customerRepository.updateBalanceWithExecutor(
+          txn,
+          customer.id,
+          customer.balance - creditAmount,
+        );
       }
 
-      if (saleReturn.refundedAmount > 0) {
+      if (adjustedReturn.refundedAmount > 0) {
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
         if (account == null) throw Exception('الحساب مش موجود');
 
@@ -174,8 +219,8 @@ class SaleReturnService {
             type: PaymentType.payment,
             personId: customerId,
             accountId: account.id,
-            amount: saleReturn.refundedAmount,
-            date: saleReturn.date,
+            amount: adjustedReturn.refundedAmount,
+            date: adjustedReturn.date,
             notes: 'رد فلوس مرتجع بيع',
           ),
         );
@@ -186,15 +231,19 @@ class SaleReturnService {
             id: _generateId(),
             accountId: account.id,
             type: TransactionType.payment,
-            amount: saleReturn.refundedAmount,
+            amount: adjustedReturn.refundedAmount,
             isDebit: true,
-            date: saleReturn.date,
-            referenceId: saleReturn.id,
+            date: adjustedReturn.date,
+            referenceId: adjustedReturn.id,
             description: 'رد فلوس مرتجع بيع',
           ),
         );
 
-        await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance - saleReturn.refundedAmount);
+        await _accountRepository.updateBalanceWithExecutor(
+          txn,
+          account.id,
+          account.balance - adjustedReturn.refundedAmount,
+        );
       }
     });
   }

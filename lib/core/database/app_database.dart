@@ -4,8 +4,14 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'database_tables.dart';
 
 class AppDatabase {
-  AppDatabase._();
+  AppDatabase._([this._inMemory = false]);
+
   static final AppDatabase instance = AppDatabase._();
+
+  /// Creates an isolated in-memory database for integration tests.
+  AppDatabase.forTesting() : this._(true);
+
+  final bool _inMemory;
   Database? _database;
 
   Future<Database> get database async {
@@ -17,10 +23,13 @@ class AppDatabase {
   Future<Database> _initDatabase() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
-    final databasePath = await getDatabasesPath();
-    final path = join(databasePath, 'dafter.db');
+
+    final databasePath = _inMemory
+        ? inMemoryDatabasePath
+        : join(await getDatabasesPath(), 'dafter.db');
+
     return openDatabase(
-      path,
+      databasePath,
       version: 6,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
@@ -51,8 +60,6 @@ class AppDatabase {
     }
     if (oldVersion < 6) {
       await db.execute('ALTER TABLE ${DatabaseTables.saleItems} ADD COLUMN cost_price REAL NOT NULL DEFAULT 0');
-      // Existing sales did not store historical cost. Snapshot the current
-      // product purchase price so their profit stops changing in the future.
       await db.execute('''
         UPDATE ${DatabaseTables.saleItems}
         SET cost_price = COALESCE((

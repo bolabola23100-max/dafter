@@ -3,6 +3,8 @@ import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/model/payment.dart';
 import 'package:dafter/features/model/sale.dart';
+import 'package:dafter/features/model/sale_return.dart';
+import 'package:dafter/features/sales/repo/sale_return_repository.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
 import 'package:flutter/material.dart';
 
@@ -18,11 +20,13 @@ class CustomerStatementScreen extends StatefulWidget {
 class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   final _customerRepository = CustomerRepository();
   final _salesRepository = SalesRepository();
+  final _saleReturnRepository = SaleReturnRepository();
   final _paymentRepository = PaymentRepository();
 
   List<Customer> _customers = [];
   Customer? _selectedCustomer;
   List<Sale> _sales = [];
+  List<SaleReturn> _returns = [];
   List<Payment> _payments = [];
   bool _isLoading = true;
 
@@ -67,13 +71,17 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
     try {
       final results = await Future.wait([
         _salesRepository.getSalesByCustomer(customerId),
+        _saleReturnRepository.getReturns(),
         _paymentRepository.getPaymentsByPerson(customerId),
       ]);
 
       if (!mounted) return;
       setState(() {
         _sales = results[0] as List<Sale>;
-        _payments = (results[1] as List<Payment>)
+        _returns = (results[1] as List<SaleReturn>)
+            .where((saleReturn) => saleReturn.customerId == customerId)
+            .toList();
+        _payments = (results[2] as List<Payment>)
             .where((payment) => payment.type == PaymentType.receipt)
             .toList();
       });
@@ -87,6 +95,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
     setState(() {
       _selectedCustomer = customer;
       _sales = [];
+      _returns = [];
       _payments = [];
     });
 
@@ -100,6 +109,14 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   double get _totalSalesRemaining =>
       _sales.fold(0, (sum, sale) => sum + sale.remainingAmount);
 
+  double get _totalReturns => _returns.fold(0, (sum, saleReturn) => sum + saleReturn.total);
+
+  double get _totalReturnCredits => _returns.fold(
+        0,
+        (sum, saleReturn) =>
+            sum + (saleReturn.total - saleReturn.refundedAmount).clamp(0.0, double.infinity),
+      );
+
   double get _totalReceipts =>
       _payments.fold(0, (sum, payment) => sum + payment.amount);
 
@@ -109,6 +126,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
 
     return customer.openingBalance +
         _totalSalesRemaining -
+        _totalReturnCredits -
         _totalReceipts;
   }
 
@@ -234,6 +252,13 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _SummaryCard(
+            title: 'إجمالي المرتجعات',
+            value: _money(_totalReturns),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _SummaryCard(
             title: 'إجمالي اللي اتدفع',
             value: _money(_totalReceipts),
           ),
@@ -260,6 +285,21 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
           subtitle: 'إجمالي ${_money(sale.total)}',
           amount: sale.remainingAmount,
           isReceipt: false,
+        ),
+      );
+    }
+
+    for (final saleReturn in _returns) {
+      final credit = (saleReturn.total - saleReturn.refundedAmount)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+      rows.add(
+        _StatementRow(
+          date: saleReturn.date,
+          title: 'مرتجع بيع',
+          subtitle: 'قيمة المرتجع ${_money(saleReturn.total)}',
+          amount: credit,
+          isReceipt: true,
         ),
       );
     }

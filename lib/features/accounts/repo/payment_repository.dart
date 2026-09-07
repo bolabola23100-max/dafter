@@ -11,7 +11,6 @@ class PaymentRepository {
 
   Future<void> addPayment(Payment payment) async {
     final db = await _database.database;
-
     await addPaymentWithExecutor(db, payment);
   }
 
@@ -19,6 +18,7 @@ class PaymentRepository {
     DatabaseExecutor executor,
     Payment payment,
   ) async {
+    if (payment.amount <= 0) throw Exception('قيمة الدفعة لازم تكون أكبر من صفر');
     await executor.insert(DatabaseTables.payments, {
       'id': payment.id,
       'type': payment.type.name,
@@ -33,47 +33,31 @@ class PaymentRepository {
 
   Future<List<Payment>> getPayments() async {
     final db = await _database.database;
-
-    final result = await db.query(
-      DatabaseTables.payments,
-      orderBy: 'date DESC',
-    );
-
+    final result = await db.query(DatabaseTables.payments, orderBy: 'date DESC');
     return result.map(_fromMap).toList();
   }
 
   Future<List<Payment>> getPaymentsByPerson(String personId) async {
     final db = await _database.database;
-
     final result = await db.query(
       DatabaseTables.payments,
       where: 'person_id = ?',
       whereArgs: [personId],
       orderBy: 'date DESC',
     );
-
     return result.map(_fromMap).toList();
   }
 
   Future<Payment?> getPaymentById(String id) async {
     final db = await _database.database;
-
     final result = await db.query(
       DatabaseTables.payments,
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
-
     if (result.isEmpty) return null;
-
     return _fromMap(result.first);
-  }
-
-  Future<void> deletePayment(String id) async {
-    final db = await _database.database;
-
-    await db.delete(DatabaseTables.payments, where: 'id = ?', whereArgs: [id]);
   }
 
   Payment _fromMap(Map<String, dynamic> map) {
