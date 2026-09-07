@@ -8,6 +8,7 @@ import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
+import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/model/stock_movement.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
@@ -61,7 +62,7 @@ class SalesService {
       }
 
       final requestedQuantities = <String, int>{};
-      final productsById = <String, dynamic>{};
+      final productsById = <String, Product>{};
       for (final item in sale.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
         if (item.price < 0 || item.discount < 0 || item.discount > item.quantity * item.price) {
