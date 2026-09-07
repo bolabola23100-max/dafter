@@ -97,49 +97,6 @@ class PurchaseRepository {
     return result.map(_itemFromMap).toList();
   }
 
-  Future<void> updatePurchase(Purchase purchase) async {
-    final db = await _database.database;
-    await db.transaction((txn) async {
-      await txn.update(
-        DatabaseTables.purchases,
-        {
-          'supplier_id': purchase.supplierId,
-          'date': purchase.date.toIso8601String(),
-          'subtotal': purchase.subtotal,
-          'discount': purchase.discount,
-          'total': purchase.total,
-          'paid_amount': purchase.paidAmount,
-          'notes': purchase.notes,
-        },
-        where: 'id = ?',
-        whereArgs: [purchase.id],
-      );
-
-      await txn.delete(
-        DatabaseTables.purchaseItems,
-        where: 'purchase_id = ?',
-        whereArgs: [purchase.id],
-      );
-
-      for (final item in purchase.items) {
-        await txn.insert(DatabaseTables.purchaseItems, {
-          'id': item.id,
-          'purchase_id': item.purchaseId,
-          'product_id': item.productId,
-          'quantity': item.quantity,
-          'price': item.price,
-          'discount': item.discount,
-          'subtotal': item.subtotal,
-        });
-      }
-    });
-  }
-
-  Future<void> deletePurchase(String id) async {
-    final db = await _database.database;
-    await db.delete(DatabaseTables.purchases, where: 'id = ?', whereArgs: [id]);
-  }
-
   Future<List<Purchase>> searchPurchases(String query) async {
     final db = await _database.database;
     final result = await db.query(
