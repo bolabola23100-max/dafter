@@ -5,19 +5,11 @@ enum PaymentType {
 
 class Payment {
   final String id;
-
   final PaymentType type;
-
-  /// العميل أو المورد أو أي شخص مرتبط بالدفعة
   final String? personId;
-
-  /// الحساب اللي دخلت/خرجت منه الفلوس
   final String accountId;
-
   final double amount;
-
   final DateTime date;
-
   final String? notes;
 
   Payment({
@@ -28,5 +20,5 @@ class Payment {
     required this.amount,
     required this.date,
     this.notes,
-  });
+  }) : assert(amount > 0, 'Payment amount must be greater than zero');
 }
