@@ -1,5 +1,6 @@
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/stock_movement.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -18,7 +19,7 @@ class ProductRepository {
       });
       if (product.quantity != 0) {
         await txn.insert(DatabaseTables.stockMovements, {
-          'id': _generateId(), 'product_id': product.id, 'type': StockMovementType.adjustment.name,
+          'id': IdGenerator.generate(), 'product_id': product.id, 'type': StockMovementType.adjustment.name,
           'quantity': product.quantity, 'date': DateTime.now().toIso8601String(), 'reference_id': product.id, 'notes': 'رصيد افتتاحي للمنتج',
         });
       }
@@ -68,7 +69,7 @@ class ProductRepository {
       final delta = product.quantity - existing.quantity;
       if (delta != 0) {
         await txn.insert(DatabaseTables.stockMovements, {
-          'id': _generateId(), 'product_id': product.id, 'type': StockMovementType.adjustment.name,
+          'id': IdGenerator.generate(), 'product_id': product.id, 'type': StockMovementType.adjustment.name,
           'quantity': delta, 'date': DateTime.now().toIso8601String(), 'reference_id': product.id,
           'notes': 'تعديل يدوي للمخزون',
         });
@@ -90,7 +91,8 @@ class ProductRepository {
 
   Future<void> updateStockWithExecutor(DatabaseExecutor executor, String productId, int newQuantity) async {
     if (newQuantity < 0) throw Exception('المخزون مينفعش يكون بالسالب');
-    await executor.update(DatabaseTables.products, {'quantity': newQuantity, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [productId]);
+    final updated = await executor.update(DatabaseTables.products, {'quantity': newQuantity, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [productId]);
+    if (updated == 0) throw Exception('المنتج غير موجود');
   }
 
   Product _fromMap(Map<String, dynamic> map) => Product(
@@ -98,6 +100,4 @@ class ProductRepository {
     purchasePrice: (map['purchase_price'] as num).toDouble(), sellingPrice: (map['selling_price'] as num).toDouble(),
     quantity: map['quantity'] as int, minQuantity: map['min_quantity'] as int,
   );
-
-  String _generateId() => '${DateTime.now().microsecondsSinceEpoch}_${DateTime.now().microsecond}';
 }
