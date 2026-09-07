@@ -61,10 +61,11 @@ class PurchaseReturnService {
     if (refundedAmount > total) {
       throw Exception('الفلوس الراجعة مينفعش تكون أكتر من قيمة المرتجع');
     }
-    if (refundedAmount > 0 && refundAccountId == null) {
+    if (refundedAmount > 0 && (refundAccountId == null || refundAccountId.isEmpty)) {
       throw Exception('اختار الحساب اللي هتنزل فيه فلوس المورد');
     }
 
+    final returnId = _newId();
     final db = await _database.database;
     await db.transaction((txn) async {
       final supplier = await _supplierRepository.getSupplierByIdWithExecutor(
@@ -72,6 +73,24 @@ class PurchaseReturnService {
         purchase.supplierId!,
       );
       if (supplier == null) throw Exception('المورد مش موجود');
+
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(refunded_amount), 0) AS refunded_amount '
+        'FROM ${DatabaseTables.purchaseReturns} WHERE purchase_id = ?',
+        [purchaseId],
+      );
+      final previouslyRefunded = refundRows.isEmpty
+          ? 0.0
+          : (refundRows.first['refunded_amount'] as num?)?.toDouble() ?? 0.0;
+      final refundableAmount = (purchase.paidAmount - previouslyRefunded)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+      if (refundedAmount > refundableAmount) {
+        throw Exception(
+          'المبلغ اللي هيرجع من المورد أكبر من المبلغ المدفوع فعليًا في الفاتورة. '
+          'المتاح للرد: ${refundableAmount.toStringAsFixed(2)}',
+        );
+      }
 
       final purchaseItems = await _purchaseRepository.getPurchaseItems(purchaseId);
       final oldReturnRows = await txn.query(
@@ -130,7 +149,7 @@ class PurchaseReturnService {
           'type': StockMovementType.purchaseReturn.name,
           'quantity': -item.quantity,
           'date': (date ?? DateTime.now()).toIso8601String(),
-          'reference_id': purchaseId,
+          'reference_id': returnId,
           'notes': notes,
         });
       }
@@ -142,7 +161,6 @@ class PurchaseReturnService {
         );
       }
 
-      final returnId = _newId();
       final returnItems = items
           .map(
             (item) => PurchaseReturnItem(

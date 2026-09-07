@@ -41,9 +41,16 @@ class PurchaseService {
 
   Future<void> createPurchase({required Purchase purchase, String? accountId}) async {
     if (purchase.items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
+    if (purchase.discount < 0 || purchase.discount > purchase.subtotal) {
+      throw Exception('الخصم غير صحيح');
+    }
     if (purchase.total < 0) throw Exception('إجمالي الفاتورة مينفعش يكون بالسالب');
     if (purchase.paidAmount < 0 || purchase.paidAmount > purchase.total) {
       throw Exception('المبلغ المدفوع غير صحيح');
+    }
+    final remaining = purchase.remainingAmount < 0 ? 0 : purchase.remainingAmount;
+    if (remaining > 0 && purchase.supplierId == null) {
+      throw Exception('أي مبلغ متبقي من الفاتورة لازم يتسجل على مورد');
     }
 
     final db = await _database.database;
@@ -55,7 +62,7 @@ class PurchaseService {
 
       for (final item in purchase.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
-        if (item.subtotal < 0) throw Exception('سعر أو خصم الصنف غير صحيح');
+        if (item.price < 0 || item.subtotal < 0) throw Exception('سعر المنتج غير صحيح');
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج غير موجود: ${item.productId}');
       }
@@ -92,13 +99,13 @@ class PurchaseService {
         );
       }
 
-      if (purchase.supplierId != null && purchase.remainingAmount > 0) {
+      if (purchase.supplierId != null && remaining > 0) {
         final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
         if (supplier == null) throw Exception('المورد غير موجود');
         await _supplierRepository.updateBalanceWithExecutor(
           txn,
           supplier.id,
-          supplier.balance + purchase.remainingAmount,
+          supplier.balance + remaining,
         );
       }
 
