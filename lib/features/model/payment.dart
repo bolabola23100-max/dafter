@@ -20,5 +20,13 @@ class Payment {
     required this.amount,
     required this.date,
     this.notes,
-  }) : assert(amount > 0, 'Payment amount must be greater than zero');
+  }) {
+    if (amount <= 0) {
+      throw ArgumentError.value(
+        amount,
+        'amount',
+        'Payment amount must be greater than zero',
+      );
+    }
+  }
 }
