@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Inventory/repositories/stock_movement_repository.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
@@ -62,7 +63,7 @@ class PurchaseService {
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج غير موجود: ${item.productId}');
         await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity + item.quantity);
-        await _stockMovementRepository.addMovementWithExecutor(txn, StockMovement(id: _generateId(), productId: product.id, type: StockMovementType.purchase, quantity: item.quantity, date: purchase.date, referenceId: purchase.id, notes: 'فاتورة شراء'));
+        await _stockMovementRepository.addMovementWithExecutor(txn, StockMovement(id: IdGenerator.generate(), productId: product.id, type: StockMovementType.purchase, quantity: item.quantity, date: purchase.date, referenceId: purchase.id, notes: 'فاتورة شراء'));
       }
       if (purchase.supplierId != null && remaining > 0) {
         final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
@@ -72,12 +73,10 @@ class PurchaseService {
       if (purchase.paidAmount > 0) {
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
         if (account == null) throw Exception('الحساب غير موجود');
-        await _paymentRepository.addPaymentWithExecutor(txn, Payment(id: _generateId(), type: PaymentType.payment, personId: purchase.supplierId, accountId: account.id, amount: purchase.paidAmount, date: purchase.date, notes: 'دفع فاتورة شراء'));
-        await _accountTransactionRepository.addTransactionWithExecutor(txn, AccountTransaction(id: _generateId(), accountId: account.id, type: TransactionType.payment, amount: purchase.paidAmount, isDebit: true, date: purchase.date, referenceId: purchase.id, description: 'دفع فاتورة شراء'));
+        await _paymentRepository.addPaymentWithExecutor(txn, Payment(id: IdGenerator.generate(), type: PaymentType.payment, personId: purchase.supplierId, accountId: account.id, amount: purchase.paidAmount, date: purchase.date, notes: 'دفع فاتورة شراء'));
+        await _accountTransactionRepository.addTransactionWithExecutor(txn, AccountTransaction(id: IdGenerator.generate(), accountId: account.id, type: TransactionType.payment, amount: purchase.paidAmount, isDebit: true, date: purchase.date, referenceId: purchase.id, description: 'دفع فاتورة شراء'));
         await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance - purchase.paidAmount);
       }
     });
   }
-
-  String _generateId() => DateTime.now().microsecondsSinceEpoch.toString();
 }
