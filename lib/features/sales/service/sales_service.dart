@@ -30,7 +30,6 @@ class SalesService {
     StockMovementRepository? stockMovementRepository,
     PaymentRepository? paymentRepository,
     AccountRepository? accountRepository,
-    PaymentRepository? paymentRepository,
     AccountTransactionRepository? accountTransactionRepository,
   }) : _database = database ?? AppDatabase.instance,
        _salesRepository = salesRepository ?? SalesRepository(),
