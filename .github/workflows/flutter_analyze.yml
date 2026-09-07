@@ -1,10 +1,10 @@
-name: Flutter Analyze
+name: Flutter CI
 
 on:
   push:
-    branches: [gpt]
+    branches: [main, gpt]
   pull_request:
-    branches: [gpt]
+    branches: [main, gpt]
 
 jobs:
   analyze:
@@ -18,3 +18,4 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze
+      - run: flutter test

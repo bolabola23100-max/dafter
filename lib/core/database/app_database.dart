@@ -21,20 +21,17 @@ class AppDatabase {
     final path = join(databasePath, 'dafter.db');
     return openDatabase(
       path,
-      version: 5,
+      version: 6,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
   }
 
-  /// Closes the current connection so a backup can be restored safely.
   Future<void> close() async {
     final database = _database;
     _database = null;
-    if (database != null) {
-      await database.close();
-    }
+    if (database != null) await database.close();
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -47,12 +44,23 @@ class AppDatabase {
       await db.execute('ALTER TABLE ${DatabaseTables.customers} ADD COLUMN balance REAL NOT NULL DEFAULT 0');
       await db.execute('UPDATE ${DatabaseTables.customers} SET balance = opening_balance WHERE balance = 0 AND opening_balance != 0');
     }
-    if (oldVersion < 4) {
-      await _createPurchaseReturnTables(db);
-    }
+    if (oldVersion < 4) await _createPurchaseReturnTables(db);
     if (oldVersion < 5) {
       await _createSaleReturnTables(db);
       await _createSaleReturnIndexes(db);
+    }
+    if (oldVersion < 6) {
+      await db.execute('ALTER TABLE ${DatabaseTables.saleItems} ADD COLUMN cost_price REAL NOT NULL DEFAULT 0');
+      // Existing sales did not store historical cost. Snapshot the current
+      // product purchase price so their profit stops changing in the future.
+      await db.execute('''
+        UPDATE ${DatabaseTables.saleItems}
+        SET cost_price = COALESCE((
+          SELECT purchase_price FROM ${DatabaseTables.products}
+          WHERE ${DatabaseTables.products}.id = ${DatabaseTables.saleItems}.product_id
+        ), 0)
+        WHERE cost_price = 0
+      ''');
     }
   }
 
@@ -63,7 +71,7 @@ class AppDatabase {
     await db.execute('CREATE TABLE ${DatabaseTables.customers} (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, address TEXT, opening_balance REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.accounts} (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, opening_balance REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.sales} (id TEXT PRIMARY KEY, customer_id TEXT, date TEXT NOT NULL, subtotal REAL NOT NULL DEFAULT 0, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (customer_id) REFERENCES ${DatabaseTables.customers}(id) ON DELETE SET NULL)');
-    await db.execute('CREATE TABLE ${DatabaseTables.saleItems} (id TEXT PRIMARY KEY, sale_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL DEFAULT 0, FOREIGN KEY (sale_id) REFERENCES ${DatabaseTables.sales}(id) ON DELETE CASCADE, FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
+    await db.execute('CREATE TABLE ${DatabaseTables.saleItems} (id TEXT PRIMARY KEY, sale_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL DEFAULT 0, cost_price REAL NOT NULL DEFAULT 0, FOREIGN KEY (sale_id) REFERENCES ${DatabaseTables.sales}(id) ON DELETE CASCADE, FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
     await db.execute('CREATE TABLE ${DatabaseTables.purchases} (id TEXT PRIMARY KEY, supplier_id TEXT, date TEXT NOT NULL, subtotal REAL NOT NULL DEFAULT 0, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (supplier_id) REFERENCES ${DatabaseTables.suppliers}(id) ON DELETE SET NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.purchaseItems} (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL DEFAULT 0, FOREIGN KEY (purchase_id) REFERENCES ${DatabaseTables.purchases}(id) ON DELETE CASCADE, FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
     await db.execute('CREATE TABLE ${DatabaseTables.payments} (id TEXT PRIMARY KEY, type TEXT NOT NULL, person_type TEXT, person_id TEXT, account_id TEXT NOT NULL, amount REAL NOT NULL, date TEXT NOT NULL, notes TEXT, FOREIGN KEY (account_id) REFERENCES ${DatabaseTables.accounts}(id))');
