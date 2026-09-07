@@ -72,6 +72,24 @@ class SaleReturnService {
         if (customer == null) throw Exception('العميل مش موجود');
       }
 
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(refunded_amount), 0) AS refunded_amount '
+        'FROM ${DatabaseTables.saleReturns} WHERE sale_id = ?',
+        [saleReturn.saleId],
+      );
+      final previouslyRefunded = refundRows.isEmpty
+          ? 0.0
+          : (refundRows.first['refunded_amount'] as num?)?.toDouble() ?? 0.0;
+      final refundableAmount = (sale.paidAmount - previouslyRefunded)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+      if (saleReturn.refundedAmount > refundableAmount) {
+        throw Exception(
+          'المبلغ اللي هيترد للعميل أكبر من المبلغ المدفوع فعليًا في الفاتورة. '
+          'المتاح للرد: ${refundableAmount.toStringAsFixed(2)}',
+        );
+      }
+
       if (saleReturn.refundedAmount > 0) {
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
         if (account == null) throw Exception('الحساب مش موجود');

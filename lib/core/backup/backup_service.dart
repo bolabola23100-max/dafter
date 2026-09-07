@@ -43,7 +43,6 @@ class BackupService {
     if (directory == null) return null;
 
     final db = await AppDatabase.instance.database;
-    // Make sure a possible WAL is checkpointed before copying the database file.
     try {
       await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
     } catch (_) {}
@@ -78,24 +77,80 @@ class BackupService {
     final databaseDirectory = await getDatabasesPath();
     final target = File(p.join(databaseDirectory, 'dafter.db'));
     final temp = File(p.join(databaseDirectory, 'dafter_restore_temp.db'));
+    final old = File(p.join(databaseDirectory, 'dafter_restore_old.db'));
 
-    // Stop the watcher connection, close the main DB, replace the file, then
-    // reopen both connections. Listeners remain registered in the watcher.
+    // Validate the imported file before replacing the live database, and keep
+    // a copy of the old database so a failed replacement can be rolled back.
+    Database? validationDatabase;
     await AppDatabaseWatcher.instance.stopConnection();
     await AppDatabase.instance.close();
 
     try {
-      await source.copy(temp.path);
-      await temp.copy(target.path);
       if (await temp.exists()) await temp.delete();
+      if (await old.exists()) await old.delete();
+
+      await source.copy(temp.path);
+      validationDatabase = await databaseFactoryFfi.openDatabase(
+        temp.path,
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+
+      final requiredTables = <String>{
+        'products',
+        'sales',
+        'sale_items',
+        'purchases',
+        'purchase_items',
+      };
+      final rows = await validationDatabase.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      );
+      final tableNames = rows
+          .map((row) => row['name'] as String?)
+          .whereType<String>()
+          .toSet();
+      if (!requiredTables.every(tableNames.contains)) {
+        throw Exception('ملف النسخة الاحتياطية غير صالح');
+      }
+
+      await validationDatabase.close();
+      validationDatabase = null;
+
+      if (await target.exists()) {
+        await target.copy(old.path);
+      }
+      await temp.copy(target.path);
+      await temp.delete();
+
+      // Opening the replaced file is the final validation. If this fails,
+      // restore the previous database instead of leaving a broken DB behind.
       await AppDatabase.instance.database;
+      if (await old.exists()) await old.delete();
+
       await AppDatabaseWatcher.instance.start();
       AppDatabaseWatcher.instance.notifyListeners();
       return true;
     } catch (_) {
+      await validationDatabase?.close();
+      validationDatabase = null;
+
       if (await temp.exists()) await temp.delete();
-      await AppDatabase.instance.database;
-      await AppDatabaseWatcher.instance.start();
+
+      try {
+        await AppDatabase.instance.close();
+      } catch (_) {}
+
+      if (await old.exists()) {
+        try {
+          await old.copy(target.path);
+          await old.delete();
+        } catch (_) {}
+      }
+
+      try {
+        await AppDatabase.instance.database;
+        await AppDatabaseWatcher.instance.start();
+      } catch (_) {}
       return false;
     }
   }
