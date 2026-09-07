@@ -35,6 +35,7 @@ class SalesRepository {
         'price': item.price,
         'discount': item.discount,
         'subtotal': item.subtotal,
+        'cost_price': item.costPrice,
       });
     }
   }
@@ -42,26 +43,13 @@ class SalesRepository {
   Future<List<Sale>> getSales() async {
     final db = await _database.database;
     final rows = await db.query(DatabaseTables.sales, orderBy: 'date DESC');
-    final sales = <Sale>[];
-    for (final row in rows) {
-      sales.add(await _fromMap(db, row));
-    }
-    return sales;
+    return Future.wait(rows.map((row) => _fromMap(db, row)));
   }
 
   Future<List<Sale>> getSalesByCustomer(String customerId) async {
     final db = await _database.database;
-    final rows = await db.query(
-      DatabaseTables.sales,
-      where: 'customer_id = ?',
-      whereArgs: [customerId],
-      orderBy: 'date DESC',
-    );
-    final sales = <Sale>[];
-    for (final row in rows) {
-      sales.add(await _fromMap(db, row));
-    }
-    return sales;
+    final rows = await db.query(DatabaseTables.sales, where: 'customer_id = ?', whereArgs: [customerId], orderBy: 'date DESC');
+    return Future.wait(rows.map((row) => _fromMap(db, row)));
   }
 
   Future<Sale?> getSaleById(String id) async {
@@ -70,12 +58,7 @@ class SalesRepository {
   }
 
   Future<Sale?> getSaleByIdWithExecutor(DatabaseExecutor executor, String id) async {
-    final rows = await executor.query(
-      DatabaseTables.sales,
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
+    final rows = await executor.query(DatabaseTables.sales, where: 'id = ?', whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;
     return _fromMap(executor, rows.first);
   }
@@ -85,15 +68,8 @@ class SalesRepository {
     return getSaleItemsWithExecutor(db, saleId);
   }
 
-  Future<List<SaleItem>> getSaleItemsWithExecutor(
-    DatabaseExecutor executor,
-    String saleId,
-  ) async {
-    final rows = await executor.query(
-      DatabaseTables.saleItems,
-      where: 'sale_id = ?',
-      whereArgs: [saleId],
-    );
+  Future<List<SaleItem>> getSaleItemsWithExecutor(DatabaseExecutor executor, String saleId) async {
+    final rows = await executor.query(DatabaseTables.saleItems, where: 'sale_id = ?', whereArgs: [saleId]);
     return rows.map(_itemFromMap).toList();
   }
 
@@ -119,14 +95,13 @@ class SalesRepository {
     );
   }
 
-  SaleItem _itemFromMap(Map<String, dynamic> row) {
-    return SaleItem(
-      id: row['id'] as String,
-      saleId: row['sale_id'] as String,
-      productId: row['product_id'] as String,
-      quantity: row['quantity'] as int,
-      price: (row['price'] as num).toDouble(),
-      discount: (row['discount'] as num).toDouble(),
-    );
-  }
+  SaleItem _itemFromMap(Map<String, dynamic> row) => SaleItem(
+        id: row['id'] as String,
+        saleId: row['sale_id'] as String,
+        productId: row['product_id'] as String,
+        quantity: row['quantity'] as int,
+        price: (row['price'] as num).toDouble(),
+        discount: (row['discount'] as num).toDouble(),
+        costPrice: (row['cost_price'] as num?)?.toDouble() ?? 0,
+      );
 }
