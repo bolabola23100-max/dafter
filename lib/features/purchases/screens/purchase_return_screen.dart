@@ -5,6 +5,7 @@ import 'package:dafter/features/model/account.dart';
 import 'package:dafter/features/model/purchase.dart';
 import 'package:dafter/features/model/purchase_return.dart';
 import 'package:dafter/features/purchases/repo/purchase_repository.dart';
+import 'package:dafter/features/purchases/repo/purchase_return_repository.dart';
 import 'package:dafter/features/purchases/service/purchase_return_service.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
   final ProductRepository _productRepository = ProductRepository();
   final SupplierRepository _supplierRepository = SupplierRepository();
   final AccountRepository _accountRepository = AccountRepository();
+  final PurchaseReturnRepository _returnRepository = PurchaseReturnRepository();
   final PurchaseReturnService _returnService = PurchaseReturnService();
 
   Purchase? selectedPurchase;
@@ -130,9 +132,20 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
   Future<Map<String, int>> _getAlreadyReturnedQuantities(
     String purchaseId,
   ) async {
-    // The service validates the final quantity again. Here we only hide fully returned items.
-    // Keeping this screen simple avoids duplicating return accounting logic.
-    return {};
+    final returns = await _returnRepository.getReturnsByPurchase(purchaseId);
+    final result = <String, int>{};
+
+    for (final purchaseReturn in returns) {
+      for (final returnItem in purchaseReturn.items) {
+        result.update(
+          returnItem.purchaseItemId,
+          (value) => value + returnItem.quantity,
+          ifAbsent: () => returnItem.quantity,
+        );
+      }
+    }
+
+    return result;
   }
 
   void _setQuantity(ReturnItem item, int quantity) {
