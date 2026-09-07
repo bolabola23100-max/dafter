@@ -65,6 +65,7 @@ class PurchaseReturnService {
       throw Exception('اختار الحساب اللي هتنزل فيه فلوس المورد');
     }
 
+    final returnId = _newId();
     final db = await _database.database;
     await db.transaction((txn) async {
       final supplier = await _supplierRepository.getSupplierByIdWithExecutor(
@@ -73,8 +74,6 @@ class PurchaseReturnService {
       );
       if (supplier == null) throw Exception('المورد مش موجود');
 
-      // A purchase return can refund only money that was actually paid for
-      // this invoice and has not already been refunded by an earlier return.
       final refundRows = await txn.rawQuery(
         'SELECT COALESCE(SUM(refunded_amount), 0) AS refunded_amount '
         'FROM ${DatabaseTables.purchaseReturns} WHERE purchase_id = ?',
@@ -150,7 +149,7 @@ class PurchaseReturnService {
           'type': StockMovementType.purchaseReturn.name,
           'quantity': -item.quantity,
           'date': (date ?? DateTime.now()).toIso8601String(),
-          'reference_id': purchaseId,
+          'reference_id': returnId,
           'notes': notes,
         });
       }
@@ -162,7 +161,6 @@ class PurchaseReturnService {
         );
       }
 
-      final returnId = _newId();
       final returnItems = items
           .map(
             (item) => PurchaseReturnItem(
