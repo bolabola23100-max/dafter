@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/reports/model/report_summary.dart';
