@@ -6,6 +6,7 @@ class SaleItem {
   int quantity;
   double price;
   double discount;
+  double costPrice;
 
   SaleItem({
     required this.id,
@@ -14,9 +15,9 @@ class SaleItem {
     required this.quantity,
     required this.price,
     this.discount = 0,
+    this.costPrice = 0,
   });
 
-  double get subtotal {
-    return (quantity * price) - discount;
-  }
+  double get subtotal => (quantity * price) - discount;
+  double get costTotal => quantity * costPrice;
 }
