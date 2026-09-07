@@ -62,7 +62,8 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
         'آجل' => remaining > 0.009,
         _ => true,
       };
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           purchase.id.toLowerCase().contains(query) ||
           supplier.toLowerCase().contains(query);
       return matchesFilter && matchesSearch;
@@ -83,9 +84,9 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -117,8 +118,8 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : purchases.isEmpty
-                      ? _buildEmptyState()
-                      : _buildTable(purchases),
+                  ? _buildEmptyState()
+                  : _buildTable(purchases),
             ),
           ],
         ),
@@ -130,18 +131,12 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
     return Row(
       children: [
         Expanded(
-          child: _stat(
-            'إجمالي المشتريات',
-            _total,
-            Icons.shopping_bag_outlined,
-          ),
+          child: _stat('إجمالي المشتريات', _total, Icons.shopping_bag_outlined),
         ),
         const SizedBox(width: 14),
         Expanded(child: _stat('المدفوع', _paid, Icons.payments_outlined)),
         const SizedBox(width: 14),
-        Expanded(
-          child: _stat('المستحق', _remaining, Icons.money_off_outlined),
-        ),
+        Expanded(child: _stat('المستحق', _remaining, Icons.money_off_outlined)),
       ],
     );
   }
@@ -314,11 +309,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.receipt_long_outlined,
-            size: 64,
-            color: Colors.grey,
-          ),
+          const Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey),
           const SizedBox(height: 12),
           const Text(
             'مفيش فواتير مشتريات',

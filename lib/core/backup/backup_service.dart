@@ -15,15 +15,12 @@ class BackupService {
   Future<String?> getBackupDirectory() async {
     final file = File(p.join(await getDatabasesPath(), 'dafter_backup_settings.json'));
     if (!await file.exists()) return null;
-
     try {
       final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final path = data['directory'] as String?;
       if (path == null || path.trim().isEmpty) return null;
       return Directory(path).existsSync() ? path : null;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
   Future<bool> chooseBackupDirectory() async {
@@ -36,76 +33,92 @@ class BackupService {
   Future<File?> backupDatabase({bool force = false}) async {
     final directory = await getBackupDirectory();
     if (directory == null) return null;
-
     final db = await AppDatabase.instance.database;
-    // Make sure a possible WAL is checkpointed before copying the database file.
-    try {
-      await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
-    } catch (_) {}
+    try { await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (_) {}
 
-    final sourcePath = p.join(await getDatabasesPath(), 'dafter.db');
-    final source = File(sourcePath);
+    final source = File(p.join(await getDatabasesPath(), 'dafter.db'));
     if (!await source.exists()) return null;
-
     final now = DateTime.now();
-    final backupPath = p.join(directory, 'dafter_backup_${_stamp(now)}.db');
     final todayPath = p.join(directory, 'dafter_backup_${_date(now)}.db');
-
     if (!force && await File(todayPath).exists()) return File(todayPath);
 
-    final target = File(backupPath);
-    await source.copy(target.path);
-    if (backupPath != todayPath) {
-      await target.copy(todayPath);
-      await target.delete();
+    final temp = File(p.join(directory, '.dafter_backup_${_stamp(now)}.tmp'));
+    try {
+      await source.copy(temp.path);
+      await _validateDatabaseFile(temp.path);
+      await temp.copy(todayPath);
+      return File(todayPath);
+    } finally {
+      if (await temp.exists()) await temp.delete();
     }
-    return File(todayPath);
   }
 
   Future<bool> restoreDatabaseFromFile() async {
     const typeGroup = XTypeGroup(label: 'نسخة دفتر', extensions: ['db']);
     final location = await openFile(acceptedTypeGroups: const [typeGroup]);
     if (location == null) return false;
-
     final source = File(location.path);
     if (!await source.exists()) return false;
 
     final databaseDirectory = await getDatabasesPath();
     final target = File(p.join(databaseDirectory, 'dafter.db'));
     final temp = File(p.join(databaseDirectory, 'dafter_restore_temp.db'));
+    final old = File(p.join(databaseDirectory, 'dafter_restore_old.db'));
 
-    // Stop the watcher connection, close the main DB, replace the file, then
-    // reopen both connections. Listeners remain registered in the watcher.
+    // Never replace the live database with an unvalidated file.
+    try {
+      if (await temp.exists()) await temp.delete();
+      await source.copy(temp.path);
+      await _validateDatabaseFile(temp.path);
+    } catch (_) {
+      if (await temp.exists()) await temp.delete();
+      return false;
+    }
+
     await AppDatabaseWatcher.instance.stopConnection();
     await AppDatabase.instance.close();
-
     try {
-      await source.copy(temp.path);
+      if (await old.exists()) await old.delete();
+      if (await target.exists()) await target.copy(old.path);
       await temp.copy(target.path);
-      if (await temp.exists()) await temp.delete();
+      await temp.delete();
+
       await AppDatabase.instance.database;
       await AppDatabaseWatcher.instance.start();
       AppDatabaseWatcher.instance.notifyListeners();
+      if (await old.exists()) await old.delete();
       return true;
     } catch (_) {
+      try { await AppDatabase.instance.close(); } catch (_) {}
       if (await temp.exists()) await temp.delete();
-      await AppDatabase.instance.database;
-      await AppDatabaseWatcher.instance.start();
+      if (await old.exists()) {
+        try { await old.copy(target.path); } catch (_) {}
+        try { await old.delete(); } catch (_) {}
+      }
+      try {
+        await AppDatabase.instance.database;
+        await AppDatabaseWatcher.instance.start();
+        AppDatabaseWatcher.instance.notifyListeners();
+      } catch (_) {}
       return false;
     }
   }
 
-  Future<void> _saveDirectory(String directory) async {
-    final settingsPath = p.join(await getDatabasesPath(), 'dafter_backup_settings.json');
-    await File(settingsPath).writeAsString(
-      jsonEncode({'directory': directory}),
-      flush: true,
-    );
+  Future<void> _validateDatabaseFile(String path) async {
+    final database = await databaseFactoryFfi.openDatabase(path, options: OpenDatabaseOptions(readOnly: true, singleInstance: false));
+    try {
+      final integrity = await database.rawQuery('PRAGMA integrity_check');
+      if (integrity.isEmpty || integrity.first.values.first.toString().toLowerCase() != 'ok') throw Exception('نسخة قاعدة البيانات تالفة');
+      final rows = await database.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('products','sales','sale_items','purchases','purchase_items')");
+      if (rows.length < 5) throw Exception('نسخة قاعدة البيانات غير صالحة');
+    } finally { await database.close(); }
   }
 
-  String _date(DateTime value) =>
-      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  Future<void> _saveDirectory(String directory) async {
+    final settingsPath = p.join(await getDatabasesPath(), 'dafter_backup_settings.json');
+    await File(settingsPath).writeAsString(jsonEncode({'directory': directory}), flush: true);
+  }
 
-  String _stamp(DateTime value) =>
-      '${_date(value)}_${value.hour.toString().padLeft(2, '0')}-${value.minute.toString().padLeft(2, '0')}-${value.second.toString().padLeft(2, '0')}';
+  String _date(DateTime value) => '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  String _stamp(DateTime value) => '${_date(value)}_${value.hour.toString().padLeft(2, '0')}-${value.minute.toString().padLeft(2, '0')}-${value.second.toString().padLeft(2, '0')}';
 }

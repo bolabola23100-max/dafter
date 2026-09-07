@@ -13,6 +13,7 @@ class ReportSummary {
   final double stockValue;
   final int suppliersCount;
   final int customersCount;
+  final double costOfGoodsSold;
 
   const ReportSummary({
     this.salesCount = 0,
@@ -29,9 +30,13 @@ class ReportSummary {
     this.stockValue = 0,
     this.suppliersCount = 0,
     this.customersCount = 0,
+    this.costOfGoodsSold = 0,
   });
 
   double get netSales => salesTotal - salesReturnsTotal;
   double get netPurchases => purchasesTotal - purchaseReturnsTotal;
-  double get net => netSales - netPurchases - expensesTotal;
+  double get grossProfit => netSales - costOfGoodsSold;
+  double get netProfit => grossProfit - expensesTotal;
+  // Kept for compatibility with existing screens.
+  double get net => netProfit;
 }
