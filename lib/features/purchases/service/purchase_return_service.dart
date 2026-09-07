@@ -61,7 +61,7 @@ class PurchaseReturnService {
     if (refundedAmount > total) {
       throw Exception('الفلوس الراجعة مينفعش تكون أكتر من قيمة المرتجع');
     }
-    if (refundedAmount > 0 && refundAccountId == null) {
+    if (refundedAmount > 0 && (refundAccountId == null || refundAccountId.isEmpty)) {
       throw Exception('اختار الحساب اللي هتنزل فيه فلوس المورد');
     }
 
@@ -72,6 +72,26 @@ class PurchaseReturnService {
         purchase.supplierId!,
       );
       if (supplier == null) throw Exception('المورد مش موجود');
+
+      // A purchase return can refund only money that was actually paid for
+      // this invoice and has not already been refunded by an earlier return.
+      final refundRows = await txn.rawQuery(
+        'SELECT COALESCE(SUM(refunded_amount), 0) AS refunded_amount '
+        'FROM ${DatabaseTables.purchaseReturns} WHERE purchase_id = ?',
+        [purchaseId],
+      );
+      final previouslyRefunded = refundRows.isEmpty
+          ? 0.0
+          : (refundRows.first['refunded_amount'] as num?)?.toDouble() ?? 0.0;
+      final refundableAmount = (purchase.paidAmount - previouslyRefunded)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+      if (refundedAmount > refundableAmount) {
+        throw Exception(
+          'المبلغ اللي هيرجع من المورد أكبر من المبلغ المدفوع فعليًا في الفاتورة. '
+          'المتاح للرد: ${refundableAmount.toStringAsFixed(2)}',
+        );
+      }
 
       final purchaseItems = await _purchaseRepository.getPurchaseItems(purchaseId);
       final oldReturnRows = await txn.query(
