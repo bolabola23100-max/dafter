@@ -59,7 +59,9 @@ class SalesService {
         final customer = await _customerRepository.getCustomerByIdWithExecutor(txn, sale.customerId!);
         if (customer == null) throw Exception('العميل غير موجود');
       }
+
       final requestedQuantities = <String, int>{};
+      final productsById = <String, dynamic>{};
       for (final item in sale.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
         if (item.price < 0 || item.discount < 0 || item.discount > item.quantity * item.price) {
@@ -71,17 +73,20 @@ class SalesService {
         final product = await _productRepository.getProductByIdWithExecutor(txn, entry.key);
         if (product == null) throw Exception('المنتج غير موجود');
         if (product.quantity < entry.value) throw Exception('الكمية مش مكفية من: ${product.name}');
+        productsById[product.id] = product;
       }
       for (final item in sale.items) {
-        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        final product = productsById[item.productId];
         if (product == null) throw Exception('المنتج غير موجود');
         item.costPrice = product.purchasePrice;
       }
+
       await _salesRepository.addSaleWithExecutor(txn, sale);
       for (final item in sale.items) {
-        final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
+        final product = productsById[item.productId];
         if (product == null) throw Exception('المنتج غير موجود');
         await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity - item.quantity);
+        product.quantity -= item.quantity;
         await _stockMovementRepository.addMovementWithExecutor(txn, StockMovement(
           id: IdGenerator.generate(), productId: product.id, type: StockMovementType.sale,
           quantity: -item.quantity, date: sale.date, referenceId: sale.id, notes: 'فاتورة بيع',
