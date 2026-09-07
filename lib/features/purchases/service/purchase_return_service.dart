@@ -169,10 +169,6 @@ class PurchaseReturnService {
       }
 
       final creditToSupplier = total - refundedAmount;
-      if (creditToSupplier > supplier.balance) {
-        throw Exception('رصيد المورد الحالي مش مكفي لتسوية المرتجع. زوّد مبلغ الفلوس الراجعة من المورد.');
-      }
-
       await _returnRepository.addReturnWithExecutor(
         txn,
         PurchaseReturn(
@@ -187,6 +183,8 @@ class PurchaseReturnService {
       );
 
       if (creditToSupplier > 0) {
+        // A negative supplier balance is valid: after a fully paid purchase,
+        // a return can leave the supplier owing money to the business.
         await _supplierRepository.updateBalanceWithExecutor(
           txn,
           supplier.id,
