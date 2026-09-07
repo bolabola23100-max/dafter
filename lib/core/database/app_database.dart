@@ -24,20 +24,12 @@ class AppDatabase {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
-    if (_inMemory) {
-      return databaseFactoryFfi.openDatabase(
-        inMemoryDatabasePath,
-        version: 6,
-        onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
-        onCreate: _onCreate,
-        onUpgrade: _onUpgrade,
-      );
-    }
+    final databasePath = _inMemory
+        ? inMemoryDatabasePath
+        : join(await getDatabasesPath(), 'dafter.db');
 
-    final databasePath = await getDatabasesPath();
-    final path = join(databasePath, 'dafter.db');
     return openDatabase(
-      path,
+      databasePath,
       version: 6,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
