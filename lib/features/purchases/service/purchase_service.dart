@@ -21,37 +21,23 @@ class PurchaseService {
   final AccountRepository _accountRepository;
   final AccountTransactionRepository _accountTransactionRepository;
 
-  PurchaseService({
-    AppDatabase? database,
-    PurchaseRepository? purchaseRepository,
-    ProductRepository? productRepository,
-    SupplierRepository? supplierRepository,
-    StockMovementRepository? stockMovementRepository,
-    PaymentRepository? paymentRepository,
-    AccountRepository? accountRepository,
-    AccountTransactionRepository? accountTransactionRepository,
-  }) : _database = database ?? AppDatabase.instance,
-       _purchaseRepository = purchaseRepository ?? PurchaseRepository(),
-       _productRepository = productRepository ?? ProductRepository(),
-       _supplierRepository = supplierRepository ?? SupplierRepository(),
-       _stockMovementRepository = stockMovementRepository ?? StockMovementRepository(),
-       _paymentRepository = paymentRepository ?? PaymentRepository(),
-       _accountRepository = accountRepository ?? AccountRepository(),
-       _accountTransactionRepository = accountTransactionRepository ?? AccountTransactionRepository();
+  PurchaseService({AppDatabase? database, PurchaseRepository? purchaseRepository, ProductRepository? productRepository, SupplierRepository? supplierRepository, StockMovementRepository? stockMovementRepository, PaymentRepository? paymentRepository, AccountRepository? accountRepository, AccountTransactionRepository? accountTransactionRepository})
+      : _database = database ?? AppDatabase.instance,
+        _purchaseRepository = purchaseRepository ?? PurchaseRepository(),
+        _productRepository = productRepository ?? ProductRepository(),
+        _supplierRepository = supplierRepository ?? SupplierRepository(),
+        _stockMovementRepository = stockMovementRepository ?? StockMovementRepository(),
+        _paymentRepository = paymentRepository ?? PaymentRepository(),
+        _accountRepository = accountRepository ?? AccountRepository(),
+        _accountTransactionRepository = accountTransactionRepository ?? AccountTransactionRepository();
 
   Future<void> createPurchase({required Purchase purchase, String? accountId}) async {
     if (purchase.items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
-    if (purchase.discount < 0 || purchase.discount > purchase.subtotal) {
-      throw Exception('الخصم غير صحيح');
-    }
+    if (purchase.discount < 0 || purchase.discount > purchase.subtotal) throw Exception('الخصم غير صحيح');
     if (purchase.total < 0) throw Exception('إجمالي الفاتورة مينفعش يكون بالسالب');
-    if (purchase.paidAmount < 0 || purchase.paidAmount > purchase.total) {
-      throw Exception('المبلغ المدفوع غير صحيح');
-    }
+    if (purchase.paidAmount < 0 || purchase.paidAmount > purchase.total) throw Exception('المبلغ المدفوع غير صحيح');
     final remaining = purchase.remainingAmount < 0 ? 0 : purchase.remainingAmount;
-    if (remaining > 0 && purchase.supplierId == null) {
-      throw Exception('أي مبلغ متبقي من الفاتورة لازم يتسجل على مورد');
-    }
+    if (remaining > 0 && purchase.supplierId == null) throw Exception('أي مبلغ متبقي من الفاتورة لازم يتسجل على مورد');
 
     final db = await _database.database;
     await db.transaction((txn) async {
@@ -59,87 +45,35 @@ class PurchaseService {
         final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
         if (supplier == null) throw Exception('المورد غير موجود');
       }
-
       for (final item in purchase.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
-        if (item.price < 0 || item.subtotal < 0) throw Exception('سعر المنتج غير صحيح');
+        if (item.price < 0 || item.discount < 0 || item.discount > item.quantity * item.price) throw Exception('سعر أو خصم الصنف غير صحيح');
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج غير موجود: ${item.productId}');
       }
-
       if (purchase.paidAmount > 0) {
-        if (accountId == null || accountId.isEmpty) {
-          throw Exception('اختار الحساب اللي دفعت منه الفلوس');
-        }
+        if (accountId == null || accountId.isEmpty) throw Exception('اختار الحساب اللي دفعت منه الفلوس');
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId);
         if (account == null) throw Exception('الحساب غير موجود');
-        if (account.balance < purchase.paidAmount) {
-          throw Exception('رصيد الحساب مش كافي');
-        }
+        if (account.balance < purchase.paidAmount) throw Exception('رصيد الحساب مش كافي');
       }
-
       await _purchaseRepository.addPurchaseWithExecutor(txn, purchase);
-
       for (final item in purchase.items) {
         final product = await _productRepository.getProductByIdWithExecutor(txn, item.productId);
         if (product == null) throw Exception('المنتج غير موجود: ${item.productId}');
-
         await _productRepository.updateStockWithExecutor(txn, product.id, product.quantity + item.quantity);
-        await _stockMovementRepository.addMovementWithExecutor(
-          txn,
-          StockMovement(
-            id: _generateId(),
-            productId: product.id,
-            type: StockMovementType.purchase,
-            quantity: item.quantity,
-            date: purchase.date,
-            referenceId: purchase.id,
-            notes: 'فاتورة شراء',
-          ),
-        );
+        await _stockMovementRepository.addMovementWithExecutor(txn, StockMovement(id: _generateId(), productId: product.id, type: StockMovementType.purchase, quantity: item.quantity, date: purchase.date, referenceId: purchase.id, notes: 'فاتورة شراء'));
       }
-
       if (purchase.supplierId != null && remaining > 0) {
         final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
         if (supplier == null) throw Exception('المورد غير موجود');
-        await _supplierRepository.updateBalanceWithExecutor(
-          txn,
-          supplier.id,
-          supplier.balance + remaining,
-        );
+        await _supplierRepository.updateBalanceWithExecutor(txn, supplier.id, supplier.balance + remaining);
       }
-
       if (purchase.paidAmount > 0) {
         final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId!);
         if (account == null) throw Exception('الحساب غير موجود');
-
-        await _paymentRepository.addPaymentWithExecutor(
-          txn,
-          Payment(
-            id: _generateId(),
-            type: PaymentType.payment,
-            personId: purchase.supplierId,
-            accountId: account.id,
-            amount: purchase.paidAmount,
-            date: purchase.date,
-            notes: 'دفع فاتورة شراء',
-          ),
-        );
-
-        await _accountTransactionRepository.addTransactionWithExecutor(
-          txn,
-          AccountTransaction(
-            id: _generateId(),
-            accountId: account.id,
-            type: TransactionType.payment,
-            amount: purchase.paidAmount,
-            isDebit: true,
-            date: purchase.date,
-            referenceId: purchase.id,
-            description: 'دفع فاتورة شراء',
-          ),
-        );
-
+        await _paymentRepository.addPaymentWithExecutor(txn, Payment(id: _generateId(), type: PaymentType.payment, personId: purchase.supplierId, accountId: account.id, amount: purchase.paidAmount, date: purchase.date, notes: 'دفع فاتورة شراء'));
+        await _accountTransactionRepository.addTransactionWithExecutor(txn, AccountTransaction(id: _generateId(), accountId: account.id, type: TransactionType.payment, amount: purchase.paidAmount, isDebit: true, date: purchase.date, referenceId: purchase.id, description: 'دفع فاتورة شراء'));
         await _accountRepository.updateBalanceWithExecutor(txn, account.id, account.balance - purchase.paidAmount);
       }
     });
