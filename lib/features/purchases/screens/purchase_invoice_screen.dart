@@ -78,7 +78,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             height: 400,
             child: ListView.separated(
               itemCount: suppliers.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final supplier = suppliers[index];
 
@@ -146,7 +146,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             height: 400,
             child: ListView.separated(
               itemCount: accounts.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final account = accounts[index];
 
@@ -226,7 +226,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             height: 450,
             child: ListView.separated(
               itemCount: products.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final product = products[index];
 
