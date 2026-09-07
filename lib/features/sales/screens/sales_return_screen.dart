@@ -73,9 +73,8 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   }
 
   void _selectSale(Sale? sale) {
-    {
-      for (final controller in _quantityControllers.values)
-        controller.dispose();
+    for (final controller in _quantityControllers.values) {
+      controller.dispose();
     }
     _quantityControllers.clear();
     if (sale != null) {
@@ -149,6 +148,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       _message('المبلغ اللي هيرجع للعميل لازم يكون بين صفر وقيمة المرتجع');
       return;
     }
+
     if (refund > 0 && _selectedAccount == null) {
       _message('اختار الحساب اللي هتطلع منه الفلوس');
       return;
@@ -385,49 +385,49 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   }
 
   Widget _summary(String label, double value) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: const TextStyle(color: Colors.grey)),
-      const SizedBox(height: 6),
-      Text(
-        '${value.toStringAsFixed(2)} جنيه',
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-      ),
-    ],
-  );
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 6),
+          Text(
+            '${value.toStringAsFixed(2)} جنيه',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ],
+      );
 
   Widget _emptyState() => _card(
-    title: 'مفيش فاتورة مختارة',
-    child: const Padding(
-      padding: EdgeInsets.all(25),
-      child: Text('اختار فاتورة بيع عشان تحدد الأصناف والكميات اللي هترجع.'),
-    ),
-  );
+        title: 'مفيش فاتورة مختارة',
+        child: const Padding(
+          padding: EdgeInsets.all(25),
+          child: Text('اختار فاتورة بيع عشان تحدد الأصناف والكميات اللي هترجع.'),
+        ),
+      );
 
   Widget _card({required String title, required Widget child}) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFE5E9EB)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E9EB)),
         ),
-        const SizedBox(height: 18),
-        child,
-      ],
-    ),
-  );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 18),
+            child,
+          ],
+        ),
+      );
 
   InputDecoration _decoration(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: Colors.white,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-  );
+        labelText: label,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      );
 }

@@ -54,10 +54,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
     super.dispose();
   }
 
-  // ============================================================
-  // Supplier
-  // ============================================================
-
   Future<void> selectSupplier() async {
     final suppliers = await _supplierRepository.getSuppliers();
 
@@ -121,10 +117,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       selectedSupplier = supplier;
     });
   }
-
-  // ============================================================
-  // Account
-  // ============================================================
 
   Future<void> selectAccount() async {
     final accounts = await _accountRepository.getAccounts();
@@ -201,10 +193,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
         return 'أخرى';
     }
   }
-
-  // ============================================================
-  // Product
-  // ============================================================
 
   Future<void> addItem() async {
     final products = await _productRepository.getProducts();
@@ -291,10 +279,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
     });
   }
 
-  // ============================================================
-  // Payment
-  // ============================================================
-
   void _updatePaidForPaymentType() {
     if (paymentType == 'نقدي') {
       paidController.text = total.toStringAsFixed(2);
@@ -319,10 +303,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
     });
   }
 
-  // ============================================================
-  // Delete item
-  // ============================================================
-
   void removeItem(int index) {
     setState(() {
       items.removeAt(index);
@@ -332,10 +312,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       }
     });
   }
-
-  // ============================================================
-  // Save
-  // ============================================================
 
   Future<void> saveInvoice() async {
     if (_isSaving) return;
@@ -428,19 +404,11 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
     }
   }
 
-  // ============================================================
-  // Message
-  // ============================================================
-
   void _message(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
     );
   }
-
-  // ============================================================
-  // Build
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -457,21 +425,13 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildSupplier(),
-
             const SizedBox(height: 16),
-
             _buildItems(),
-
             const SizedBox(height: 16),
-
             _buildPayment(),
-
             const SizedBox(height: 20),
-
             _buildSummary(),
-
             const SizedBox(height: 20),
-
             ElevatedButton.icon(
               onPressed: _isSaving ? null : saveInvoice,
               icon: _isSaving
@@ -491,10 +451,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       ),
     );
   }
-
-  // ============================================================
-  // Supplier UI
-  // ============================================================
 
   Widget _buildSupplier() {
     return _Card(
@@ -522,10 +478,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       ),
     );
   }
-
-  // ============================================================
-  // Items UI
-  // ============================================================
 
   Widget _buildItems() {
     return _Card(
@@ -598,10 +550,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
     );
   }
 
-  // ============================================================
-  // Payment UI
-  // ============================================================
-
   Widget _buildPayment() {
     return _Card(
       title: 'طريقة الدفع',
@@ -622,9 +570,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             ],
             onChanged: onPaymentTypeChanged,
           ),
-
           const SizedBox(height: 14),
-
           if (paid > 0 || paymentType != 'آجل') ...[
             InkWell(
               onTap: selectAccount,
@@ -632,7 +578,9 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
               child: InputDecorator(
                 decoration: InputDecoration(
                   labelText: 'الحساب',
-                  prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
+                  prefixIcon: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                  ),
                   suffixIcon: const Icon(Icons.arrow_drop_down),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -641,15 +589,15 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
                 child: Text(
                   selectedAccount?.name ?? 'اختر الحساب',
                   style: TextStyle(
-                    color: selectedAccount == null ? Colors.grey : Colors.black,
+                    color: selectedAccount == null
+                        ? Colors.grey
+                        : Colors.black,
                   ),
                 ),
               ),
             ),
-
             const SizedBox(height: 14),
           ],
-
           CustomTextFormField(
             controller: paidController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -668,10 +616,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       ),
     );
   }
-
-  // ============================================================
-  // Summary
-  // ============================================================
 
   Widget _buildSummary() {
     return _Card(
@@ -698,10 +642,6 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
   }
 }
 
-// ================================================================
-// Purchase Line
-// ================================================================
-
 class _PurchaseLine {
   final Product product;
 
@@ -720,10 +660,6 @@ class _PurchaseLine {
     return (quantity * price) - discount;
   }
 }
-
-// ================================================================
-// Add Product Dialog
-// ================================================================
 
 class _AddProductDialog extends StatefulWidget {
   final Product product;
@@ -759,9 +695,7 @@ class _AddProductDialogState extends State<_AddProductDialog> {
 
   void add() {
     final price = double.tryParse(priceController.text.trim());
-
     final quantity = int.tryParse(quantityController.text.trim());
-
     final discount = double.tryParse(discountController.text.trim()) ?? 0;
 
     if (price == null || price < 0) {
@@ -822,17 +756,13 @@ class _AddProductDialogState extends State<_AddProductDialog> {
                 suffixText: 'ج.م',
               ),
             ),
-
             const SizedBox(height: 12),
-
             CustomTextFormField(
               controller: quantityController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'الكمية'),
             ),
-
             const SizedBox(height: 12),
-
             CustomTextFormField(
               controller: discountController,
               keyboardType: const TextInputType.numberWithOptions(
@@ -856,10 +786,6 @@ class _AddProductDialogState extends State<_AddProductDialog> {
     );
   }
 }
-
-// ================================================================
-// Card
-// ================================================================
 
 class _Card extends StatelessWidget {
   final String title;
@@ -890,22 +816,16 @@ class _Card extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (action != null) action!,
+              ?action,
             ],
           ),
-
           const SizedBox(height: 18),
-
           child,
         ],
       ),
     );
   }
 }
-
-// ================================================================
-// Summary Row
-// ================================================================
 
 class _SummaryRow extends StatelessWidget {
   final String title;
