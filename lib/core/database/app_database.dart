@@ -4,12 +4,12 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'database_tables.dart';
 
 class AppDatabase {
-  AppDatabase._({this._inMemory = false});
+  AppDatabase._([this._inMemory = false]);
 
   static final AppDatabase instance = AppDatabase._();
 
   /// Creates an isolated in-memory database for integration tests.
-  AppDatabase.forTesting() : this._(inMemory: true);
+  AppDatabase.forTesting() : this._(true);
 
   final bool _inMemory;
   Database? _database;
