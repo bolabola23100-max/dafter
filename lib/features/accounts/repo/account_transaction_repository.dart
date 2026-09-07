@@ -11,7 +11,6 @@ class AccountTransactionRepository {
 
   Future<void> addTransaction(AccountTransaction transaction) async {
     final db = await _database.database;
-
     await addTransactionWithExecutor(db, transaction);
   }
 
@@ -19,6 +18,7 @@ class AccountTransactionRepository {
     DatabaseExecutor executor,
     AccountTransaction transaction,
   ) async {
+    if (transaction.amount <= 0) throw Exception('قيمة الحركة لازم تكون أكبر من صفر');
     await executor.insert(DatabaseTables.accountTransactions, {
       'id': transaction.id,
       'account_id': transaction.accountId,
@@ -33,53 +33,31 @@ class AccountTransactionRepository {
 
   Future<List<AccountTransaction>> getTransactions() async {
     final db = await _database.database;
-
-    final result = await db.query(
-      DatabaseTables.accountTransactions,
-      orderBy: 'date DESC',
-    );
-
+    final result = await db.query(DatabaseTables.accountTransactions, orderBy: 'date DESC');
     return result.map(_fromMap).toList();
   }
 
-  Future<List<AccountTransaction>> getAccountTransactions(
-    String accountId,
-  ) async {
+  Future<List<AccountTransaction>> getAccountTransactions(String accountId) async {
     final db = await _database.database;
-
     final result = await db.query(
       DatabaseTables.accountTransactions,
       where: 'account_id = ?',
       whereArgs: [accountId],
       orderBy: 'date DESC',
     );
-
     return result.map(_fromMap).toList();
   }
 
   Future<AccountTransaction?> getTransactionById(String id) async {
     final db = await _database.database;
-
     final result = await db.query(
       DatabaseTables.accountTransactions,
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
-
     if (result.isEmpty) return null;
-
     return _fromMap(result.first);
-  }
-
-  Future<void> deleteTransaction(String id) async {
-    final db = await _database.database;
-
-    await db.delete(
-      DatabaseTables.accountTransactions,
-      where: 'id = ?',
-      whereArgs: [id],
-    );
   }
 
   AccountTransaction _fromMap(Map<String, dynamic> map) {
