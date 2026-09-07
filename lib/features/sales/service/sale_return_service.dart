@@ -199,11 +199,13 @@ class SaleReturnService {
       if (customerId != null && creditAmount > 0) {
         final customer = await _customerRepository.getCustomerByIdWithExecutor(txn, customerId);
         if (customer == null) throw Exception('العميل مش موجود');
-        final newBalance = customer.balance - creditAmount;
-        if (newBalance < 0) {
-          throw Exception('قيمة المرتجع أكبر من المبلغ المستحق على العميل');
-        }
-        await _customerRepository.updateBalanceWithExecutor(txn, customer.id, newBalance);
+        // A negative balance is a valid customer credit: the store owes the
+        // customer after a return when the original invoice was already paid.
+        await _customerRepository.updateBalanceWithExecutor(
+          txn,
+          customer.id,
+          customer.balance - creditAmount,
+        );
       }
 
       if (adjustedReturn.refundedAmount > 0) {
