@@ -34,6 +34,7 @@ class ReportSummary {
   });
 
   double get netSales => salesTotal - salesReturnsTotal;
+  double get netPurchases => purchasesTotal - purchaseReturnsTotal;
   double get grossProfit => netSales - costOfGoodsSold;
   double get netProfit => grossProfit - expensesTotal;
   // Kept for compatibility with existing screens.
