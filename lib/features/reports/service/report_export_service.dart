@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dafter/core/database/app_database.dart';
@@ -39,8 +40,6 @@ class ReportExportService {
     return true;
   }
 
-  /// Builds the PDF without opening a save dialog, making the exporter
-  /// reusable by preview/print flows and easy to integration-test.
   Future<Uint8List> buildPdf({
     required ReportSummary summary,
     required String period,
@@ -214,12 +213,11 @@ class ReportExportService {
 
   Future<Uint8List> _buildPdf(ReportSummary s, String period, String report, _ReportDetails details) async {
     final document = pw.Document();
-    final regular = await PdfGoogleFonts.notoSansArabicRegular();
-    final bold = await PdfGoogleFonts.notoSansArabicBold();
+    final font = await _loadOfflineArabicFont();
 
     document.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
-      theme: pw.ThemeData.withFont(base: regular, bold: bold),
+      theme: pw.ThemeData.withFont(base: font, bold: font),
       build: (_) => [
         pw.Directionality(
           textDirection: pw.TextDirection.rtl,
@@ -244,6 +242,38 @@ class ReportExportService {
       ],
     ));
     return document.save();
+  }
+
+  Future<pw.Font> _loadOfflineArabicFont() async {
+    final candidates = <String>[];
+    if (Platform.isWindows) {
+      candidates.addAll([
+        r'C:\Windows\Fonts\tahoma.ttf',
+        r'C:\Windows\Fonts\arial.ttf',
+      ]);
+    } else if (Platform.isLinux) {
+      candidates.addAll([
+        '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
+        '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
+      ]);
+    } else if (Platform.isMacOS) {
+      candidates.addAll([
+        '/System/Library/Fonts/Supplemental/Arial.ttf',
+        '/System/Library/Fonts/Supplemental/Tahoma.ttf',
+      ]);
+    }
+
+    for (final path in candidates) {
+      final file = File(path);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        return pw.Font.ttf(ByteData.view(bytes.buffer));
+      }
+    }
+
+    throw StateError(
+      'لم يتم العثور على خط عربي محلي. تأكد من وجود Tahoma أو Arial في Windows.',
+    );
   }
 
   pw.Widget _pdfSummary(ReportSummary s) => _pdfDetailTable(
