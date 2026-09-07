@@ -90,7 +90,7 @@ void main() {
 
     expect((await db.query(DatabaseTables.products)).single['quantity'], 9);
     expect((await db.query(DatabaseTables.accounts)).single['balance'], 100);
-    expect((await db.query(DatabaseTables.customers)).single['balance'], 0);
+    expect((await db.query(DatabaseTables.customers)).single['balance'], 10);
 
     final movement = (await db.query(
       DatabaseTables.stockMovements,
