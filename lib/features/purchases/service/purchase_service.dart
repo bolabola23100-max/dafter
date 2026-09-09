@@ -35,10 +35,11 @@ class PurchaseService {
 
   Future<void> createPurchase({required Purchase purchase, String? accountId}) async {
     if (purchase.items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
-    if (purchase.discount < 0 || purchase.discount > purchase.subtotal) throw Exception('الخصم غير صحيح');
-    if (purchase.total < 0) throw Exception('إجمالي الفاتورة مينفعش يكون بالسالب');
-    if (purchase.paidAmount < 0 || purchase.paidAmount > purchase.total) throw Exception('المبلغ المدفوع غير صحيح');
+    if (!purchase.discount.isFinite || purchase.discount < 0 || purchase.discount > purchase.subtotal) throw Exception('الخصم غير صحيح');
+    if (!purchase.subtotal.isFinite || purchase.subtotal < 0 || !purchase.total.isFinite || purchase.total < 0) throw Exception('إجمالي الفاتورة غير صحيح');
+    if (!purchase.paidAmount.isFinite || purchase.paidAmount < 0 || purchase.paidAmount > purchase.total) throw Exception('المبلغ المدفوع غير صحيح');
     final remaining = purchase.remainingAmount < 0 ? 0 : purchase.remainingAmount;
+    if (!remaining.isFinite) throw Exception('المبلغ المتبقي غير صحيح');
     if (remaining > 0 && purchase.supplierId == null) throw Exception('أي مبلغ متبقي من الفاتورة لازم يتسجل على مورد');
 
     final db = await _database.database;
@@ -51,7 +52,7 @@ class PurchaseService {
       final productsById = <String, Product>{};
       for (final item in purchase.items) {
         if (item.quantity <= 0) throw Exception('كمية المنتج لازم تكون أكبر من صفر');
-        if (item.price < 0 || item.discount < 0 || item.discount > item.quantity * item.price) {
+        if (!item.price.isFinite || !item.discount.isFinite || item.price < 0 || item.discount < 0 || item.discount > item.quantity * item.price) {
           throw Exception('سعر أو خصم الصنف غير صحيح');
         }
         if (!productsById.containsKey(item.productId)) {
