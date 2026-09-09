@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
@@ -16,8 +17,6 @@ class JournalEntryService {
        _accountRepository = accountRepository ?? AccountRepository(),
        _transactionRepository =
            transactionRepository ?? AccountTransactionRepository();
-
-  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
 
   Future<void> saveEntry({
     required String debitAccountId,
@@ -58,34 +57,35 @@ class JournalEntryService {
         throw Exception('رصيد الحساب الدائن مش مكفي');
       }
 
-      final entryId = _newId();
+      final entryId = IdGenerator.generate();
       final now = date ?? DateTime.now();
+      final cleanDescription = description.trim();
 
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _newId(),
+          id: IdGenerator.generate(),
           accountId: debitAccount.id,
           type: TransactionType.adjustment,
           amount: amount,
           isDebit: false,
           date: now,
           referenceId: entryId,
-          description: description.trim(),
+          description: cleanDescription,
         ),
       );
 
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _newId(),
+          id: IdGenerator.generate(),
           accountId: creditAccount.id,
           type: TransactionType.adjustment,
           amount: amount,
           isDebit: true,
           date: now,
           referenceId: entryId,
-          description: description.trim(),
+          description: cleanDescription,
         ),
       );
 
