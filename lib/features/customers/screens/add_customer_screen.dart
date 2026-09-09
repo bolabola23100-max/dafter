@@ -1,3 +1,4 @@
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
@@ -44,7 +45,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
     setState(() => _isSaving = true);
     try {
       final customer = Customer(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: IdGenerator.generate(),
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim().isEmpty
             ? null
