@@ -18,7 +18,7 @@ class AccountOperationService {
     String? notes,
   }) async {
     if (accountId.trim().isEmpty) throw Exception('اختار الحساب الأول');
-    if (amount <= 0) throw Exception('المبلغ لازم يكون أكبر من صفر');
+    if (!amount.isFinite || amount <= 0) throw Exception('المبلغ لازم يكون أكبر من صفر');
 
     final db = await _database.database;
 
@@ -33,6 +33,7 @@ class AccountOperationService {
       if (accountRows.isEmpty) throw Exception('الحساب مش موجود');
 
       final balance = (accountRows.first['balance'] as num).toDouble();
+      if (!balance.isFinite) throw Exception('رصيد الحساب غير صالح');
       if (type == PaymentType.payment && amount > balance) {
         throw Exception('الرصيد في الحساب مش كفاية');
       }
@@ -42,6 +43,8 @@ class AccountOperationService {
       final newBalance = type == PaymentType.receipt
           ? balance + amount
           : balance - amount;
+
+      if (!newBalance.isFinite) throw Exception('الرصيد الناتج غير صالح');
 
       await txn.insert(DatabaseTables.payments, {
         'id': id,
