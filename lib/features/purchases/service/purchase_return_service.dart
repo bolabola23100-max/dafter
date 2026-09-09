@@ -31,12 +31,12 @@ class PurchaseReturnService {
     AccountRepository? accountRepository,
     AccountTransactionRepository? accountTransactionRepository,
   }) : _database = database ?? AppDatabase.instance,
-       _purchaseRepository = purchaseRepository ?? PurchaseRepository(),
-       _returnRepository = returnRepository ?? PurchaseReturnRepository(),
-       _productRepository = productRepository ?? ProductRepository(),
-       _supplierRepository = supplierRepository ?? SupplierRepository(),
-       _accountRepository = accountRepository ?? AccountRepository(),
-       _transactionRepository = accountTransactionRepository ?? AccountTransactionRepository();
+       _purchaseRepository = purchaseRepository ?? PurchaseRepository(database: database ?? AppDatabase.instance),
+       _returnRepository = returnRepository ?? PurchaseReturnRepository(database: database ?? AppDatabase.instance),
+       _productRepository = productRepository ?? ProductRepository(database: database ?? AppDatabase.instance),
+       _supplierRepository = supplierRepository ?? SupplierRepository(database: database ?? AppDatabase.instance),
+       _accountRepository = accountRepository ?? AccountRepository(database: database ?? AppDatabase.instance),
+       _transactionRepository = accountTransactionRepository ?? AccountTransactionRepository(database: database ?? AppDatabase.instance);
 
   Future<void> createReturn({
     required String purchaseId,
