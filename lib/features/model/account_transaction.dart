@@ -28,11 +28,11 @@ class AccountTransaction {
     this.referenceId,
     this.description,
   }) {
-    if (amount <= 0) {
+    if (!amount.isFinite || amount <= 0) {
       throw ArgumentError.value(
         amount,
         'amount',
-        'Transaction amount must be greater than zero',
+        'Transaction amount must be a finite number greater than zero',
       );
     }
   }
