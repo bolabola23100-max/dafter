@@ -79,7 +79,7 @@ class PurchaseReturnService {
           .clamp(0.0, double.infinity)
           .toDouble();
 
-      final purchaseItems = await _purchaseRepository.getPurchaseItems(purchaseId);
+      final purchaseItems = await _purchaseRepository.getPurchaseItemsWithExecutor(txn, purchaseId);
       final oldReturnRows = await txn.query(
         DatabaseTables.purchaseReturnItems,
         columns: ['purchase_item_id', 'quantity'],
