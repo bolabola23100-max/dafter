@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/model/account.dart';
@@ -60,7 +61,7 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
 
     try {
       final account = Account(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: IdGenerator.generate(),
         name: name,
         type: _mapAccountType(_type),
         openingBalance: balance,
