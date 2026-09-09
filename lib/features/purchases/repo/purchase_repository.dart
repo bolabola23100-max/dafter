@@ -89,7 +89,14 @@ class PurchaseRepository {
 
   Future<List<PurchaseItem>> getPurchaseItems(String purchaseId) async {
     final db = await _database.database;
-    final result = await db.query(
+    return getPurchaseItemsWithExecutor(db, purchaseId);
+  }
+
+  Future<List<PurchaseItem>> getPurchaseItemsWithExecutor(
+    DatabaseExecutor executor,
+    String purchaseId,
+  ) async {
+    final result = await executor.query(
       DatabaseTables.purchaseItems,
       where: 'purchase_id = ?',
       whereArgs: [purchaseId],
