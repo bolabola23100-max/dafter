@@ -47,17 +47,17 @@ void main() {
 
   tearDown(() => database.close());
 
-  test('return restores stock and only refunds the amount actually paid', () async {
+  Future<void> createSale({String id = 'sale-1', String itemId = 'sale-item-1'}) async {
     await SalesService(database: database).createSale(
       sale: Sale(
-        id: 'sale-1',
+        id: id,
         customerId: 'customer-1',
         date: DateTime(2026, 9, 8, 10),
         paidAmount: 5,
         items: [
           SaleItem(
-            id: 'sale-item-1',
-            saleId: 'sale-1',
+            id: itemId,
+            saleId: id,
             productId: 'product-1',
             quantity: 2,
             price: 10,
@@ -66,6 +66,10 @@ void main() {
       ),
       accountId: 'account-1',
     );
+  }
+
+  test('return restores stock and only refunds the amount actually paid', () async {
+    await createSale();
 
     await SaleReturnService(database: database).createReturn(
       saleReturn: SaleReturn(
@@ -109,24 +113,7 @@ void main() {
   });
 
   test('second refund cannot exceed the remaining paid amount', () async {
-    await SalesService(database: database).createSale(
-      sale: Sale(
-        id: 'sale-2',
-        customerId: 'customer-1',
-        date: DateTime(2026, 9, 8),
-        paidAmount: 5,
-        items: [
-          SaleItem(
-            id: 'sale-item-2',
-            saleId: 'sale-2',
-            productId: 'product-1',
-            quantity: 2,
-            price: 10,
-          ),
-        ],
-      ),
-      accountId: 'account-1',
-    );
+    await createSale(id: 'sale-2', itemId: 'sale-item-2');
 
     await SaleReturnService(database: database).createReturn(
       saleReturn: SaleReturn(
@@ -175,5 +162,43 @@ void main() {
 
     expect((await db.query(DatabaseTables.saleReturns)).length, 1);
     expect((await db.query(DatabaseTables.products)).single['quantity'], 9);
+  });
+
+  test('duplicate sale-item rows cannot exceed the sold quantity', () async {
+    await createSale(id: 'sale-3', itemId: 'sale-item-3');
+
+    await expectLater(
+      SaleReturnService(database: database).createReturn(
+        saleReturn: SaleReturn(
+          id: 'return-3',
+          saleId: 'sale-3',
+          customerId: 'customer-1',
+          date: DateTime(2026, 9, 8, 14),
+          refundedAmount: 0,
+          items: [
+            SaleReturnItem(
+              id: 'return-item-3a',
+              returnId: 'return-3',
+              saleItemId: 'sale-item-3',
+              productId: 'product-1',
+              quantity: 1,
+              price: 10,
+            ),
+            SaleReturnItem(
+              id: 'return-item-3b',
+              returnId: 'return-3',
+              saleItemId: 'sale-item-3',
+              productId: 'product-1',
+              quantity: 2,
+              price: 10,
+            ),
+          ],
+        ),
+      ),
+      throwsA(isA<Exception>()),
+    );
+
+    expect(await db.query(DatabaseTables.saleReturns), isEmpty);
+    expect((await db.query(DatabaseTables.products)).single['quantity'], 8);
   });
 }
