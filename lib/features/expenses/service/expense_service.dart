@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/expenses/repo/expense_repository.dart';
@@ -35,7 +36,7 @@ class ExpenseService {
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          id: IdGenerator.generate(),
           accountId: account.id,
           type: TransactionType.payment,
           amount: expense.amount,
