@@ -1,5 +1,6 @@
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
 
@@ -16,6 +17,7 @@ class AccountOperationService {
     String? personName,
     String? notes,
   }) async {
+    if (accountId.trim().isEmpty) throw Exception('اختار الحساب الأول');
     if (amount <= 0) throw Exception('المبلغ لازم يكون أكبر من صفر');
 
     final db = await _database.database;
@@ -36,7 +38,7 @@ class AccountOperationService {
       }
 
       final now = DateTime.now();
-      final id = now.microsecondsSinceEpoch.toString();
+      final id = IdGenerator.generate();
       final newBalance = type == PaymentType.receipt
           ? balance + amount
           : balance - amount;
@@ -53,7 +55,7 @@ class AccountOperationService {
       });
 
       await txn.insert(DatabaseTables.accountTransactions, {
-        'id': 'tx_$id',
+        'id': IdGenerator.generate(),
         'account_id': accountId,
         'type': type == PaymentType.receipt
             ? TransactionType.receipt.name
