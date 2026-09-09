@@ -27,5 +27,13 @@ class AccountTransaction {
     required this.date,
     this.referenceId,
     this.description,
-  }) : assert(amount > 0, 'Transaction amount must be greater than zero');
+  }) {
+    if (amount <= 0) {
+      throw ArgumentError.value(
+        amount,
+        'amount',
+        'Transaction amount must be greater than zero',
+      );
+    }
+  }
 }
