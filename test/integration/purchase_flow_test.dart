@@ -2,6 +2,8 @@ import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/model/purchase.dart';
 import 'package:dafter/features/model/purchase_item.dart';
+import 'package:dafter/features/model/purchase_return.dart';
+import 'package:dafter/features/purchases/service/purchase_return_service.dart';
 import 'package:dafter/features/purchases/service/purchase_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,6 +46,27 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  Future<void> createPurchase({String id = 'purchase-1', String itemId = 'purchase-item-1'}) async {
+    await PurchaseService(database: database).createPurchase(
+      purchase: Purchase(
+        id: id,
+        supplierId: 'supplier-1',
+        date: DateTime(2026, 9, 8, 11),
+        paidAmount: 6,
+        items: [
+          PurchaseItem(
+            id: itemId,
+            purchaseId: id,
+            productId: 'product-1',
+            quantity: 2,
+            price: 5,
+          ),
+        ],
+      ),
+      accountId: 'account-1',
+    );
+  }
 
   test('purchase flow updates stock, supplier, cash and ledgers', () async {
     final service = PurchaseService(database: database);
@@ -140,5 +163,76 @@ void main() {
     expect((await db.query(DatabaseTables.products)).single['quantity'], 3);
     expect((await db.query(DatabaseTables.accounts)).single['balance'], 100);
     expect(await db.query(DatabaseTables.payments), isEmpty);
+  });
+
+  test('purchase return updates stock, supplier credit and account correctly', () async {
+    await createPurchase();
+
+    await PurchaseReturnService(database: database).createReturn(
+      purchaseId: 'purchase-1',
+      items: [
+        PurchaseReturnItem(
+          id: 'purchase-return-item-1',
+          returnId: 'ignored',
+          purchaseItemId: 'purchase-item-1',
+          productId: 'product-1',
+          quantity: 1,
+          price: 5,
+        ),
+      ],
+      refundedAmount: 3,
+      refundAccountId: 'account-1',
+      date: DateTime(2026, 9, 8, 12),
+    );
+
+    expect((await db.query(DatabaseTables.products)).single['quantity'], 4);
+    expect((await db.query(DatabaseTables.suppliers)).single['balance'], 2);
+    expect((await db.query(DatabaseTables.accounts)).single['balance'], 97);
+
+    final returns = await db.query(DatabaseTables.purchaseReturns);
+    expect(returns, hasLength(1));
+    expect(returns.single['total'], 5);
+    expect(returns.single['refunded_amount'], 3);
+
+    final movements = await db.query(
+      DatabaseTables.stockMovements,
+      where: 'reference_id = ?',
+      whereArgs: [returns.single['id']],
+    );
+    expect(movements, hasLength(1));
+    expect(movements.single['quantity'], -1);
+  });
+
+  test('duplicate purchase-item rows cannot exceed the purchased quantity', () async {
+    await createPurchase();
+
+    await expectLater(
+      PurchaseReturnService(database: database).createReturn(
+        purchaseId: 'purchase-1',
+        items: [
+          PurchaseReturnItem(
+            id: 'purchase-return-item-2a',
+            returnId: 'ignored',
+            purchaseItemId: 'purchase-item-1',
+            productId: 'product-1',
+            quantity: 1,
+            price: 5,
+          ),
+          PurchaseReturnItem(
+            id: 'purchase-return-item-2b',
+            returnId: 'ignored',
+            purchaseItemId: 'purchase-item-1',
+            productId: 'product-1',
+            quantity: 2,
+            price: 5,
+          ),
+        ],
+      ),
+      throwsA(isA<Exception>()),
+    );
+
+    expect(await db.query(DatabaseTables.purchaseReturns), isEmpty);
+    expect((await db.query(DatabaseTables.products)).single['quantity'], 5);
+    expect((await db.query(DatabaseTables.suppliers)).single['balance'], 4);
   });
 }
