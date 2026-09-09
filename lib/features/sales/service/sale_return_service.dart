@@ -1,5 +1,6 @@
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Inventory/repositories/stock_movement_repository.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
@@ -102,9 +103,21 @@ class SaleReturnService {
           row['sale_item_id'] as String: (row['returned_quantity'] as num).toInt(),
       };
 
-      final adjustedItems = <SaleReturnItem>[];
+      // Aggregate quantities in this request as well. Without this, the same
+      // sale item could appear twice and each row would validate against the
+      // old return quantity independently, allowing an oversized return.
+      final requestedByItem = <String, int>{};
       for (final item in saleReturn.items) {
         if (item.quantity <= 0) throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
+        requestedByItem.update(
+          item.saleItemId,
+          (quantity) => quantity + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+
+      final adjustedItems = <SaleReturnItem>[];
+      for (final item in saleReturn.items) {
         final saleItemRows = await txn.query(
           DatabaseTables.saleItems,
           where: 'id = ? AND sale_id = ?',
@@ -116,7 +129,8 @@ class SaleReturnService {
         final saleItem = saleItemRows.first;
         final soldQuantity = saleItem['quantity'] as int;
         final alreadyReturned = returnedByItem[item.saleItemId] ?? 0;
-        if (alreadyReturned + item.quantity > soldQuantity) {
+        final requestedQuantity = requestedByItem[item.saleItemId] ?? 0;
+        if (alreadyReturned + requestedQuantity > soldQuantity) {
           throw Exception('الكمية المرتجعة أكبر من الكمية اللي اتباعت');
         }
         if (saleItem['product_id'] as String != item.productId) {
@@ -184,7 +198,7 @@ class SaleReturnService {
         await _stockMovementRepository.addMovementWithExecutor(
           txn,
           StockMovement(
-            id: _generateId(),
+            id: IdGenerator.generate(),
             productId: product.id,
             type: StockMovementType.saleReturn,
             quantity: item.quantity,
@@ -215,7 +229,7 @@ class SaleReturnService {
         await _paymentRepository.addPaymentWithExecutor(
           txn,
           Payment(
-            id: _generateId(),
+            id: IdGenerator.generate(),
             type: PaymentType.payment,
             personId: customerId,
             accountId: account.id,
@@ -228,7 +242,7 @@ class SaleReturnService {
         await _transactionRepository.addTransactionWithExecutor(
           txn,
           AccountTransaction(
-            id: _generateId(),
+            id: IdGenerator.generate(),
             accountId: account.id,
             type: TransactionType.payment,
             amount: adjustedReturn.refundedAmount,
@@ -247,6 +261,4 @@ class SaleReturnService {
       }
     });
   }
-
-  String _generateId() => DateTime.now().microsecondsSinceEpoch.toString();
 }
