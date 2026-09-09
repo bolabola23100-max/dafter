@@ -21,11 +21,11 @@ class Payment {
     required this.date,
     this.notes,
   }) {
-    if (amount <= 0) {
+    if (!amount.isFinite || amount <= 0) {
       throw ArgumentError.value(
         amount,
         'amount',
-        'Payment amount must be greater than zero',
+        'Payment amount must be a finite number greater than zero',
       );
     }
   }
