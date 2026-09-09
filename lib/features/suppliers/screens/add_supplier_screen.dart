@@ -1,3 +1,4 @@
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/model/supplier.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
@@ -62,7 +63,7 @@ class _AddSupplierScreenState extends State<AddSupplierScreen> {
     });
 
     final supplier = Supplier(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: IdGenerator.generate(),
       name: nameController.text.trim(),
       phone: _emptyToNull(phoneController.text),
       address: _emptyToNull(addressController.text),
