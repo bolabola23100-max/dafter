@@ -12,7 +12,11 @@ Future<void> main() async {
   await windowManager.setPreventClose(true);
 
   await AppDatabase.instance.database;
-  await BackupService.instance.backupDatabase();
+  // A backup failure must never prevent the POS from starting. The user can
+  // still create a backup explicitly from the close flow.
+  try {
+    await BackupService.instance.backupDatabase();
+  } catch (_) {}
 
   runApp(const DafterApp());
 }
