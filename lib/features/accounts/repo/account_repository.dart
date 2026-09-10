@@ -10,8 +10,11 @@ class AccountRepository {
     : _database = database ?? AppDatabase.instance;
 
   Future<void> addAccount(Account account) async {
-    final db = await _database.database;
+    if (!account.openingBalance.isFinite || !account.balance.isFinite) {
+      throw ArgumentError('رصيد الحساب غير صالح');
+    }
 
+    final db = await _database.database;
     await db.insert(DatabaseTables.accounts, {
       'id': account.id,
       'name': account.name,
@@ -25,24 +28,19 @@ class AccountRepository {
 
   Future<List<Account>> getAccounts() async {
     final db = await _database.database;
-
     final result = await db.query(DatabaseTables.accounts, orderBy: 'name ASC');
-
     return result.map(_fromMap).toList();
   }
 
   Future<Account?> getAccountById(String id) async {
     final db = await _database.database;
-
     final result = await db.query(
       DatabaseTables.accounts,
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
-
     if (result.isEmpty) return null;
-
     return _fromMap(result.first);
   }
 
@@ -56,15 +54,12 @@ class AccountRepository {
       whereArgs: [id],
       limit: 1,
     );
-
     if (result.isEmpty) return null;
-
     return _fromMap(result.first);
   }
 
   Future<void> updateBalance(String accountId, double newBalance) async {
     final db = await _database.database;
-
     await updateBalanceWithExecutor(db, accountId, newBalance);
   }
 
@@ -73,18 +68,25 @@ class AccountRepository {
     String accountId,
     double newBalance,
   ) async {
-    await executor.update(
+    if (!newBalance.isFinite) {
+      throw ArgumentError.value(newBalance, 'newBalance', 'رصيد الحساب غير صالح');
+    }
+    final updated = await executor.update(
       DatabaseTables.accounts,
       {'balance': newBalance, 'updated_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [accountId],
     );
+    if (updated == 0) throw Exception('الحساب مش موجود');
   }
 
   Future<void> updateAccount(Account account) async {
-    final db = await _database.database;
+    if (!account.openingBalance.isFinite || !account.balance.isFinite) {
+      throw ArgumentError('رصيد الحساب غير صالح');
+    }
 
-    await db.update(
+    final db = await _database.database;
+    final updated = await db.update(
       DatabaseTables.accounts,
       {
         'name': account.name,
@@ -96,11 +98,11 @@ class AccountRepository {
       where: 'id = ?',
       whereArgs: [account.id],
     );
+    if (updated == 0) throw Exception('الحساب مش موجود');
   }
 
   Future<void> deleteAccount(String id) async {
     final db = await _database.database;
-
     await db.delete(DatabaseTables.accounts, where: 'id = ?', whereArgs: [id]);
   }
 
