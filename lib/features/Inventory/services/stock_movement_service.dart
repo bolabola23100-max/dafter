@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Inventory/repositories/stock_movement_repository.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/model/product.dart';
@@ -40,7 +41,7 @@ class StockMovementService {
       if (newQuantity < 0) throw Exception('الكمية لا يمكن أن تكون سالبة');
 
       final movement = StockMovement(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: IdGenerator.generate(),
         productId: productId,
         type: type,
         quantity: quantity,
@@ -72,7 +73,7 @@ class StockMovementService {
       if (difference == 0) return;
 
       final movement = StockMovement(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        id: IdGenerator.generate(),
         productId: currentProduct.id,
         type: StockMovementType.adjustment,
         quantity: difference,
@@ -108,7 +109,7 @@ class StockMovementService {
         if (difference == 0) continue;
 
         final movement = StockMovement(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          id: IdGenerator.generate(),
           productId: product.id,
           type: StockMovementType.adjustment,
           quantity: difference,
