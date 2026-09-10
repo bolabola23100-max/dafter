@@ -4,6 +4,7 @@ class CustomTextFormField extends StatelessWidget {
   const CustomTextFormField({
     super.key,
     this.controller,
+    this.openingBalanceController,
     this.label,
     this.hintText,
     this.suffixText,
@@ -24,6 +25,8 @@ class CustomTextFormField extends StatelessWidget {
   });
 
   final TextEditingController? controller;
+  // Backward-compatible alias used by the journal-entry screen.
+  final TextEditingController? openingBalanceController;
   final String? label;
   final String? hintText;
   final String? suffixText;
@@ -69,9 +72,11 @@ class CustomTextFormField extends StatelessWidget {
             border: border,
           );
 
+    final effectiveController = controller ?? openingBalanceController;
+
     return TextFormField(
-      controller: controller,
-      initialValue: controller == null ? initialValue : null,
+      controller: effectiveController,
+      initialValue: effectiveController == null ? initialValue : null,
       keyboardType: keyboardType,
       validator: validator,
       onChanged: onChanged,
