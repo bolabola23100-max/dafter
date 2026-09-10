@@ -4,7 +4,6 @@ class CustomTextFormField extends StatelessWidget {
   const CustomTextFormField({
     super.key,
     this.controller,
-    this.openingBalanceController,
     this.label,
     this.hintText,
     this.suffixText,
@@ -25,7 +24,6 @@ class CustomTextFormField extends StatelessWidget {
   });
 
   final TextEditingController? controller;
-  final TextEditingController? openingBalanceController;
   final String? label;
   final String? hintText;
   final String? suffixText;
@@ -46,8 +44,6 @@ class CustomTextFormField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveController = controller ?? openingBalanceController;
-
     Widget? resolvedPrefixIcon;
     if (prefixIcon != null) {
       if (prefixIcon is IconData) {
@@ -74,8 +70,8 @@ class CustomTextFormField extends StatelessWidget {
           );
 
     return TextFormField(
-      controller: effectiveController,
-      initialValue: effectiveController == null ? initialValue : null,
+      controller: controller,
+      initialValue: controller == null ? initialValue : null,
       keyboardType: keyboardType,
       validator: validator,
       onChanged: onChanged,
