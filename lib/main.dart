@@ -30,6 +30,7 @@ class DafterApp extends StatefulWidget {
 
 class _DafterAppState extends State<DafterApp> with WindowListener {
   bool _showingCloseDialog = false;
+  bool _closingWindow = false;
 
   @override
   void initState() {
@@ -43,9 +44,20 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
     super.dispose();
   }
 
+  Future<void> _closeWindow() async {
+    if (_closingWindow) return;
+    _closingWindow = true;
+
+    // The native X button is intercepted by setPreventClose(true). Once the
+    // user has confirmed, disable interception before forcing the window out.
+    // This also prevents the close request from being trapped again.
+    await windowManager.setPreventClose(false);
+    await windowManager.destroy();
+  }
+
   @override
   void onWindowClose() async {
-    if (_showingCloseDialog) return;
+    if (_closingWindow || _showingCloseDialog) return;
     _showingCloseDialog = true;
 
     final result = await showDialog<_CloseAction>(
@@ -55,8 +67,14 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
         title: const Text('قبل ما تقفل دفتر'),
         content: const Text('تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, _CloseAction.cancel), child: const Text('إلغاء')),
-          TextButton(onPressed: () => Navigator.pop(context, _CloseAction.closeWithoutBackup), child: const Text('إغلاق بدون نسخة')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _CloseAction.cancel),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _CloseAction.closeWithoutBackup),
+            child: const Text('إغلاق بدون نسخة'),
+          ),
           FilledButton.icon(
             onPressed: () => Navigator.pop(context, _CloseAction.backupAndClose),
             icon: const Icon(Icons.backup_outlined),
@@ -67,7 +85,7 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
     );
 
     _showingCloseDialog = false;
-    if (result == null || result == _CloseAction.cancel) return;
+    if (!mounted || result == null || result == _CloseAction.cancel) return;
 
     if (result == _CloseAction.backupAndClose) {
       var directory = await BackupService.instance.getBackupDirectory();
@@ -87,8 +105,15 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('النسخ الاحتياطي فشل'),
-              content: const Text('مقدرتش أحفظ النسخة الاحتياطية، فالبرنامج مش هيتقفل عشان بياناتك تفضل آمنة.'),
-              actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('تمام'))],
+              content: const Text(
+                'مقدرتش أحفظ النسخة الاحتياطية، فالبرنامج مش هيتقفل عشان بياناتك تفضل آمنة.',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('تمام'),
+                ),
+              ],
             ),
           );
         }
@@ -96,7 +121,7 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
       }
     }
 
-    await windowManager.destroy();
+    await _closeWindow();
   }
 
   @override
