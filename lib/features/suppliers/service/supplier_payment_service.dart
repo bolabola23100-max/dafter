@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/accounts/repo/payment_repository.dart';
@@ -32,7 +33,7 @@ class SupplierPaymentService {
     DateTime? date,
     String? notes,
   }) async {
-    if (amount <= 0) {
+    if (!amount.isFinite || amount <= 0) {
       throw Exception('مبلغ الدفعة يجب أن يكون أكبر من صفر');
     }
 
@@ -42,19 +43,21 @@ class SupplierPaymentService {
     await db.transaction((txn) async {
       final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, supplierId);
       if (supplier == null) throw Exception('المورد غير موجود');
-
+      if (!supplier.balance.isFinite || supplier.balance <= 0) {
+        throw Exception('المورد ملوش رصيد مستحق للسداد');
+      }
       if (amount > supplier.balance) {
         throw Exception('مبلغ الدفعة أكبر من المستحق على المورد');
       }
 
       final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId);
       if (account == null) throw Exception('الحساب غير موجود');
-
+      if (!account.balance.isFinite) throw Exception('رصيد الحساب غير صالح');
       if (amount > account.balance) {
         throw Exception('رصيد الحساب غير كافٍ');
       }
 
-      final id = _generateId();
+      final id = IdGenerator.generate();
 
       await _paymentRepository.addPaymentWithExecutor(
         txn,
@@ -72,7 +75,7 @@ class SupplierPaymentService {
       await _accountTransactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _generateId(),
+          id: IdGenerator.generate(),
           accountId: accountId,
           type: TransactionType.payment,
           amount: amount,
@@ -96,6 +99,4 @@ class SupplierPaymentService {
       );
     });
   }
-
-  String _generateId() => DateTime.now().microsecondsSinceEpoch.toString();
 }
