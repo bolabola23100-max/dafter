@@ -72,13 +72,12 @@ class ReportService {
     DateTime? to,
   ) async {
     final saleFilter = _dateFilter('s.date', from, to);
-    final saleArgs = saleFilter.args;
     final saleResult = await db.rawQuery(
       'SELECT COALESCE(SUM(si.quantity * si.cost_price), 0) AS total '
       'FROM ${DatabaseTables.saleItems} si '
       'INNER JOIN ${DatabaseTables.sales} s ON s.id = si.sale_id'
       '${saleFilter.sql.isEmpty ? '' : ' WHERE ${saleFilter.sql}'}',
-      saleArgs,
+      saleFilter.args,
     );
 
     final returnFilter = _dateFilter('sr.date', from, to);
@@ -95,7 +94,11 @@ class ReportService {
         (saleResult.first['total'] as num?)?.toDouble() ?? 0;
     final returnedCost =
         (returnResult.first['total'] as num?)?.toDouble() ?? 0;
-    return (soldCost - returnedCost).clamp(0, double.infinity).toDouble();
+
+    // Keep the sign. A period can legitimately contain returns of sales from
+    // an earlier period, so clamping to zero would understate the period's
+    // profit.
+    return soldCost - returnedCost;
   }
 
   _DateFilter _dateFilter(String column, DateTime? from, DateTime? to) {
