@@ -49,10 +49,10 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   }
 
   void _message(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
-  Future<void> _newPurchase() async { if (await Nav.push(context, const PurchaseInvoiceScreen()) == true) _load(); }
-  Future<void> _newSupplier() async { await Nav.push(context, const AddSupplierScreen()); if (mounted) _load(); }
-  Future<void> _report() => Nav.push(context, const PurchaseReportScreen());
-  Future<void> _return() async { if (await Nav.push(context, const PurchaseReturnScreen()) == true) _load(); }
+  Future<void> _newPurchase() async { if (await Nav.push(context, const PurchaseInvoiceScreen()) == true) await _load(); }
+  Future<void> _newSupplier() async { await Nav.push(context, const AddSupplierScreen()); if (mounted) await _load(); }
+  Future<void> _report() async { await Nav.push(context, const PurchaseReportScreen()); }
+  Future<void> _return() async { if (await Nav.push(context, const PurchaseReturnScreen()) == true) await _load(); }
 
   void _menu(Purchase invoice) {
     showModalBottomSheet<void>(context: context, backgroundColor: Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))), builder: (_) => PurchaseInvoiceMenuSheet(
@@ -60,7 +60,7 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
       onView: () async { Navigator.pop(context); await Nav.push(context, PurchaseInvoiceDetailsScreen(purchase: invoice)); },
       onPdf: () async { Navigator.pop(context); try { final saved = await _documents.savePdf(invoice); if (mounted && saved) _message('تم حفظ PDF بنجاح'); } catch (e) { if (mounted) _message('تعذر حفظ PDF: $e'); } },
       onPrint: () async { Navigator.pop(context); try { await _documents.printPdf(invoice); } catch (e) { if (mounted) _message('تعذر الطباعة: $e'); } },
-      onReturn: () async { Navigator.pop(context); await Nav.push(context, PurchaseReturnScreen(purchaseId: invoice.id)); if (mounted) _load(); },
+      onReturn: () async { Navigator.pop(context); await Nav.push(context, PurchaseReturnScreen(purchaseId: invoice.id)); if (mounted) await _load(); },
     ));
   }
 
