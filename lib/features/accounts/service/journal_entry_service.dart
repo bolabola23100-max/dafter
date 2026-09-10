@@ -25,10 +25,13 @@ class JournalEntryService {
     required String description,
     DateTime? date,
   }) async {
+    if (debitAccountId.trim().isEmpty || creditAccountId.trim().isEmpty) {
+      throw Exception('اختار الحسابين الأول');
+    }
     if (debitAccountId == creditAccountId) {
       throw Exception('مينفعش تختار نفس الحساب في الطرفين');
     }
-    if (amount <= 0) {
+    if (!amount.isFinite || amount <= 0) {
       throw Exception('أدخل مبلغ صحيح');
     }
     if (description.trim().isEmpty) {
@@ -53,6 +56,9 @@ class JournalEntryService {
       if (creditAccount == null) {
         throw Exception('الحساب الدائن مش موجود');
       }
+      if (!debitAccount.balance.isFinite || !creditAccount.balance.isFinite) {
+        throw Exception('رصيد أحد الحسابات غير صالح');
+      }
       if (creditAccount.balance < amount) {
         throw Exception('رصيد الحساب الدائن مش مكفي');
       }
@@ -60,6 +66,11 @@ class JournalEntryService {
       final entryId = IdGenerator.generate();
       final now = date ?? DateTime.now();
       final cleanDescription = description.trim();
+      final newDebitBalance = debitAccount.balance + amount;
+      final newCreditBalance = creditAccount.balance - amount;
+      if (!newDebitBalance.isFinite || !newCreditBalance.isFinite) {
+        throw Exception('الرصيد الناتج غير صالح');
+      }
 
       await _transactionRepository.addTransactionWithExecutor(
         txn,
@@ -92,13 +103,13 @@ class JournalEntryService {
       await _accountRepository.updateBalanceWithExecutor(
         txn,
         debitAccount.id,
-        debitAccount.balance + amount,
+        newDebitBalance,
       );
 
       await _accountRepository.updateBalanceWithExecutor(
         txn,
         creditAccount.id,
-        creditAccount.balance - amount,
+        newCreditBalance,
       );
     });
   }
