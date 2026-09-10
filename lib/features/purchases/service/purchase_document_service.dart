@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:dafter/features/model/purchase.dart';
 import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
