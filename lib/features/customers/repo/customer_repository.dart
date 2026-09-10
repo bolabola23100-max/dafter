@@ -1,5 +1,4 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/model/customer.dart';
@@ -31,14 +30,19 @@ class CustomerRepository {
   Future<List<Customer>> searchCustomers(String query) async {
     final db = await _database.database;
     final value = '%${query.trim()}%';
-    final rows = await db.query(DatabaseTables.customers,
-        where: 'name LIKE ? OR phone LIKE ?', whereArgs: [value, value], orderBy: 'name ASC');
+    final rows = await db.query(DatabaseTables.customers, where: 'name LIKE ? OR phone LIKE ?', whereArgs: [value, value], orderBy: 'name ASC');
     return rows.map(_fromMap).toList();
   }
 
   Future<void> updateCustomer(Customer customer) async {
     final db = await _database.database;
-    await db.update(DatabaseTables.customers, _toMap(customer), where: 'id = ?', whereArgs: [customer.id]);
+    final updated = await db.update(DatabaseTables.customers, {
+      'name': customer.name.trim(),
+      'phone': customer.phone?.trim().isEmpty == true ? null : customer.phone?.trim(),
+      'address': customer.address?.trim().isEmpty == true ? null : customer.address?.trim(),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, where: 'id = ?', whereArgs: [customer.id]);
+    if (updated == 0) throw Exception('العميل غير موجود');
   }
 
   Future<void> updateBalance(String customerId, double newBalance) async {
@@ -47,35 +51,32 @@ class CustomerRepository {
   }
 
   Future<void> updateBalanceWithExecutor(DatabaseExecutor executor, String customerId, double newBalance) async {
-    await executor.update(DatabaseTables.customers,
-        {'balance': newBalance, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [customerId]);
+    if (!newBalance.isFinite) throw Exception('رصيد العميل غير صحيح');
+    final updated = await executor.update(DatabaseTables.customers, {'balance': newBalance, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [customerId]);
+    if (updated == 0) throw Exception('العميل غير موجود');
   }
 
   Future<void> deleteCustomer(String id) async {
     final db = await _database.database;
-    await db.delete(DatabaseTables.customers, where: 'id = ?', whereArgs: [id]);
+    final customer = await getCustomerByIdWithExecutor(db, id);
+    if (customer == null) throw Exception('العميل غير موجود');
+    if (!customer.balance.isFinite || customer.balance.abs() > 0.009) throw Exception('مينفعش تحذف عميل عليه رصيد');
+
+    final sale = await db.query(DatabaseTables.sales, columns: ['id'], where: 'customer_id = ?', whereArgs: [id], limit: 1);
+    final saleReturn = await db.query(DatabaseTables.saleReturns, columns: ['id'], where: 'customer_id = ?', whereArgs: [id], limit: 1);
+    final payment = await db.query(DatabaseTables.payments, columns: ['id'], where: 'person_type = ? AND person_id = ?', whereArgs: ['customer', id], limit: 1);
+    if (sale.isNotEmpty || saleReturn.isNotEmpty || payment.isNotEmpty) {
+      throw Exception('العميل عليه تاريخ مالي سابق؛ مينفعش يتحذف حفاظًا على كشف الحساب');
+    }
+
+    final deleted = await db.delete(DatabaseTables.customers, where: 'id = ?', whereArgs: [id]);
+    if (deleted == 0) throw Exception('العميل غير موجود');
   }
 
   Map<String, Object?> _toMap(Customer customer) {
     final now = DateTime.now().toIso8601String();
-    return {
-      'id': customer.id,
-      'name': customer.name.trim(),
-      'phone': customer.phone?.trim().isEmpty == true ? null : customer.phone?.trim(),
-      'address': customer.address?.trim().isEmpty == true ? null : customer.address?.trim(),
-      'opening_balance': customer.openingBalance,
-      'balance': customer.balance,
-      'created_at': now,
-      'updated_at': now,
-    };
+    return {'id': customer.id, 'name': customer.name.trim(), 'phone': customer.phone?.trim().isEmpty == true ? null : customer.phone?.trim(), 'address': customer.address?.trim().isEmpty == true ? null : customer.address?.trim(), 'opening_balance': customer.openingBalance, 'balance': customer.balance, 'created_at': now, 'updated_at': now};
   }
 
-  Customer _fromMap(Map<String, Object?> map) => Customer(
-    id: map['id'] as String,
-    name: map['name'] as String,
-    phone: map['phone'] as String?,
-    address: map['address'] as String?,
-    openingBalance: (map['opening_balance'] as num?)?.toDouble() ?? 0,
-    balance: (map['balance'] as num?)?.toDouble() ?? 0,
-  );
+  Customer _fromMap(Map<String, Object?> map) => Customer(id: map['id'] as String, name: map['name'] as String, phone: map['phone'] as String?, address: map['address'] as String?, openingBalance: (map['opening_balance'] as num?)?.toDouble() ?? 0, balance: (map['balance'] as num?)?.toDouble() ?? 0);
 }
