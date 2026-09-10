@@ -79,9 +79,27 @@ class ProductRepository {
 
   Future<void> deleteProduct(String id) async {
     final db = await _database.database;
+    final product = await getProductByIdWithExecutor(db, id);
+    if (product == null) throw Exception('المنتج غير موجود');
+    if (product.quantity != 0) {
+      throw Exception('مينفعش تحذف منتج ولسه عنده كمية في المخزن');
+    }
+
+    // Historical stock/sales/purchases are intentionally preserved. A product
+    // that has ever been used must not be physically deleted because its rows
+    // are referenced by accounting and inventory history.
     final movements = await db.query(DatabaseTables.stockMovements, columns: ['id'], where: 'product_id = ?', whereArgs: [id], limit: 1);
-    if (movements.isNotEmpty) throw Exception('مينفعش تحذف منتج عليه حركات مخزون');
-    await db.delete(DatabaseTables.products, where: 'id = ?', whereArgs: [id]);
+    final saleItems = await db.query(DatabaseTables.saleItems, columns: ['id'], where: 'product_id = ?', whereArgs: [id], limit: 1);
+    final purchaseItems = await db.query(DatabaseTables.purchaseItems, columns: ['id'], where: 'product_id = ?', whereArgs: [id], limit: 1);
+    final saleReturnItems = await db.query(DatabaseTables.saleReturnItems, columns: ['id'], where: 'product_id = ?', whereArgs: [id], limit: 1);
+    final purchaseReturnItems = await db.query(DatabaseTables.purchaseReturnItems, columns: ['id'], where: 'product_id = ?', whereArgs: [id], limit: 1);
+
+    if (movements.isNotEmpty || saleItems.isNotEmpty || purchaseItems.isNotEmpty || saleReturnItems.isNotEmpty || purchaseReturnItems.isNotEmpty) {
+      throw Exception('المنتج كميته صفر، لكن عليه حركة أو فاتورة سابقة؛ مينفعش يتحذف حفاظًا على التاريخ الحسابي والمخزني');
+    }
+
+    final deleted = await db.delete(DatabaseTables.products, where: 'id = ?', whereArgs: [id]);
+    if (deleted == 0) throw Exception('المنتج غير موجود');
   }
 
   Future<void> updateStock(String productId, int newQuantity) async {
