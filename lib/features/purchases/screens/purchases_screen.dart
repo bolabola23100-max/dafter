@@ -35,10 +35,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
 
   Future<void> _load() async {
     if (mounted) setState(() => _loading = true);
-    try {
-      final data = await _repository.getPurchases();
-      if (mounted) setState(() { _invoices = data; _loading = false; });
-    } catch (e) { if (mounted) { setState(() => _loading = false); _message('تعذر تحميل فواتير الشراء: $e'); } }
+    try { final data = await _repository.getPurchases(); if (mounted) setState(() { _invoices = data; _loading = false; }); }
+    catch (e) { if (mounted) { setState(() => _loading = false); _message('تعذر تحميل فواتير الشراء: $e'); } }
   }
 
   List<Purchase> get _filtered {
@@ -51,7 +49,6 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   }
 
   void _message(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
-
   Future<void> _newPurchase() async { if (await Nav.push(context, const PurchaseInvoiceScreen()) == true) _load(); }
   Future<void> _newSupplier() async { await Nav.push(context, const AddSupplierScreen()); if (mounted) _load(); }
   Future<void> _report() => Nav.push(context, const PurchaseReportScreen());
@@ -71,23 +68,15 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   Widget build(BuildContext context) {
     final invoices = _filtered;
     return Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        Expanded(child: ActionButton(icon: Icons.receipt_long_outlined, label: 'كشف المشتريات', primary: false, onTap: _report)),
-        const SizedBox(width: 12),
-        Expanded(child: ActionButton(icon: Icons.person_add_outlined, label: 'إضافة مورد', primary: false, onTap: _newSupplier)),
-        const SizedBox(width: 12),
-        Expanded(child: ActionButton(icon: Icons.assignment_return_outlined, label: 'مرتجع شراء', primary: false, onTap: _return)),
-        const SizedBox(width: 12),
-        Expanded(child: ActionButton(icon: Icons.add_shopping_cart_outlined, label: 'فاتورة شراء', primary: true, onTap: _newPurchase)),
-      ]),
+      Row(children: [Expanded(child: ActionButton(icon: Icons.receipt_long_outlined, label: 'كشف المشتريات', primary: false, onTap: _report)), const SizedBox(width: 12), Expanded(child: ActionButton(icon: Icons.person_add_outlined, label: 'إضافة مورد', primary: false, onTap: _newSupplier)), const SizedBox(width: 12), Expanded(child: ActionButton(icon: Icons.assignment_return_outlined, label: 'مرتجع شراء', primary: false, onTap: _return)), const SizedBox(width: 12), Expanded(child: ActionButton(icon: Icons.add_shopping_cart_outlined, label: 'فاتورة شراء', primary: true, onTap: _newPurchase))]),
       const SizedBox(height: 20),
       PurchasesSummaryRow(totalPurchases: _invoices.fold(0, (s, p) => s + p.total), invoicesCount: _invoices.length, totalPaid: _invoices.fold(0, (s, p) => s + p.paidAmount), totalRemaining: _invoices.fold(0, (s, p) => s + p.remainingAmount)),
       const SizedBox(height: 20),
-      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Expanded(child: Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         PurchasesFilterBar(selectedFilter: _filter, searchController: _searchController, count: invoices.length, onFilterSelected: (v) => setState(() => _filter = v), onSearchChanged: (_) => setState(() {})),
         const SizedBox(height: 14),
         Expanded(child: _loading ? const Center(child: CircularProgressIndicator()) : PurchasesTable(invoices: invoices, onInvoiceTap: _menu)),
-      ])),
+      ]))),
     ]));
   }
 }
