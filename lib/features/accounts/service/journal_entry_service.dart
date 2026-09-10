@@ -1,4 +1,5 @@
 import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
@@ -17,8 +18,6 @@ class JournalEntryService {
        _transactionRepository =
            transactionRepository ?? AccountTransactionRepository();
 
-  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
-
   Future<void> saveEntry({
     required String debitAccountId,
     required String creditAccountId,
@@ -26,10 +25,13 @@ class JournalEntryService {
     required String description,
     DateTime? date,
   }) async {
+    if (debitAccountId.trim().isEmpty || creditAccountId.trim().isEmpty) {
+      throw Exception('اختار الحسابين الأول');
+    }
     if (debitAccountId == creditAccountId) {
       throw Exception('مينفعش تختار نفس الحساب في الطرفين');
     }
-    if (amount <= 0) {
+    if (!amount.isFinite || amount <= 0) {
       throw Exception('أدخل مبلغ صحيح');
     }
     if (description.trim().isEmpty) {
@@ -54,51 +56,60 @@ class JournalEntryService {
       if (creditAccount == null) {
         throw Exception('الحساب الدائن مش موجود');
       }
+      if (!debitAccount.balance.isFinite || !creditAccount.balance.isFinite) {
+        throw Exception('رصيد أحد الحسابات غير صالح');
+      }
       if (creditAccount.balance < amount) {
         throw Exception('رصيد الحساب الدائن مش مكفي');
       }
 
-      final entryId = _newId();
+      final entryId = IdGenerator.generate();
       final now = date ?? DateTime.now();
+      final cleanDescription = description.trim();
+      final newDebitBalance = debitAccount.balance + amount;
+      final newCreditBalance = creditAccount.balance - amount;
+      if (!newDebitBalance.isFinite || !newCreditBalance.isFinite) {
+        throw Exception('الرصيد الناتج غير صالح');
+      }
 
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _newId(),
+          id: IdGenerator.generate(),
           accountId: debitAccount.id,
           type: TransactionType.adjustment,
           amount: amount,
           isDebit: false,
           date: now,
           referenceId: entryId,
-          description: description.trim(),
+          description: cleanDescription,
         ),
       );
 
       await _transactionRepository.addTransactionWithExecutor(
         txn,
         AccountTransaction(
-          id: _newId(),
+          id: IdGenerator.generate(),
           accountId: creditAccount.id,
           type: TransactionType.adjustment,
           amount: amount,
           isDebit: true,
           date: now,
           referenceId: entryId,
-          description: description.trim(),
+          description: cleanDescription,
         ),
       );
 
       await _accountRepository.updateBalanceWithExecutor(
         txn,
         debitAccount.id,
-        debitAccount.balance + amount,
+        newDebitBalance,
       );
 
       await _accountRepository.updateBalanceWithExecutor(
         txn,
         creditAccount.id,
-        creditAccount.balance - amount,
+        newCreditBalance,
       );
     });
   }

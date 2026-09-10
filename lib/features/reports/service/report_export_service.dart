@@ -1,14 +1,11 @@
-import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
 import 'package:dafter/features/reports/model/report_summary.dart';
 import 'package:excel/excel.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 class ReportExportService {
   ReportExportService({AppDatabase? database})
@@ -245,35 +242,8 @@ class ReportExportService {
   }
 
   Future<pw.Font> _loadOfflineArabicFont() async {
-    final candidates = <String>[];
-    if (Platform.isWindows) {
-      candidates.addAll([
-        r'C:\Windows\Fonts\tahoma.ttf',
-        r'C:\Windows\Fonts\arial.ttf',
-      ]);
-    } else if (Platform.isLinux) {
-      candidates.addAll([
-        '/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf',
-        '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
-      ]);
-    } else if (Platform.isMacOS) {
-      candidates.addAll([
-        '/System/Library/Fonts/Supplemental/Arial.ttf',
-        '/System/Library/Fonts/Supplemental/Tahoma.ttf',
-      ]);
-    }
-
-    for (final path in candidates) {
-      final file = File(path);
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        return pw.Font.ttf(ByteData.view(bytes.buffer));
-      }
-    }
-
-    throw StateError(
-      'لم يتم العثور على خط عربي محلي. تأكد من وجود Tahoma أو Arial في Windows.',
-    );
+    final data = await rootBundle.load('assets/fonts/NotoNaskhArabic-Regular.ttf');
+    return pw.Font.ttf(data);
   }
 
   pw.Widget _pdfSummary(ReportSummary s) => _pdfDetailTable(

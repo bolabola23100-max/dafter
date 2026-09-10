@@ -1,10 +1,11 @@
+import 'package:dafter/core/database/app_database.dart';
+import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/model/account.dart';
 import 'package:dafter/features/model/account_transaction.dart';
-import 'package:dafter/core/database/app_database.dart';
-import 'package:dafter/core/database/database_tables.dart';
 import 'package:flutter/material.dart';
 
 class TransferScreen extends StatefulWidget {
@@ -42,7 +43,7 @@ class _TransferScreenState extends State<TransferScreen> {
         if (accounts.length > 1) _toAccount = accounts[1];
         _loading = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _loading = false);
         _message('حصلت مشكلة وإحنا بنجيب الحسابات');
@@ -60,41 +61,65 @@ class _TransferScreenState extends State<TransferScreen> {
       _message('مينفعش تحول لنفس الحساب');
       return;
     }
-    if (amount == null || amount <= 0) {
+    if (amount == null || !amount.isFinite || amount <= 0) {
       _message('اكتب مبلغ صحيح');
-      return;
-    }
-    if (amount > _fromAccount!.balance) {
-      _message('رصيد الحساب اللي هتسحب منه مش مكفي');
       return;
     }
 
     setState(() => _saving = true);
     try {
       final db = await AppDatabase.instance.database;
-      final id = DateTime.now().microsecondsSinceEpoch.toString();
+      final id = IdGenerator.generate();
       final now = DateTime.now();
       final description = _notesController.text.trim().isEmpty
           ? 'تحويل من ${_fromAccount!.name} إلى ${_toAccount!.name}'
           : _notesController.text.trim();
 
       await db.transaction((txn) async {
-        await _accountRepository.updateBalanceWithExecutor(
+        final from = await _accountRepository.getAccountByIdWithExecutor(
           txn,
           _fromAccount!.id,
-          _fromAccount!.balance - amount,
+        );
+        final to = await _accountRepository.getAccountByIdWithExecutor(
+          txn,
+          _toAccount!.id,
+        );
+
+        if (from == null || to == null) {
+          throw Exception('أحد الحسابات لم يعد موجودًا');
+        }
+        if (from.id == to.id) {
+          throw Exception('مينفعش تحول لنفس الحساب');
+        }
+        if (!from.balance.isFinite || !to.balance.isFinite) {
+          throw Exception('رصيد أحد الحسابات غير صالح');
+        }
+        if (from.balance < amount) {
+          throw Exception('رصيد الحساب اللي هتسحب منه مش مكفي');
+        }
+
+        final newFromBalance = from.balance - amount;
+        final newToBalance = to.balance + amount;
+        if (!newFromBalance.isFinite || !newToBalance.isFinite) {
+          throw Exception('الرصيد الناتج غير صالح');
+        }
+
+        await _accountRepository.updateBalanceWithExecutor(
+          txn,
+          from.id,
+          newFromBalance,
         );
         await _accountRepository.updateBalanceWithExecutor(
           txn,
-          _toAccount!.id,
-          _toAccount!.balance + amount,
+          to.id,
+          newToBalance,
         );
 
         await _transactionRepository.addTransactionWithExecutor(
           txn,
           AccountTransaction(
-            id: '${id}_out',
-            accountId: _fromAccount!.id,
+            id: IdGenerator.generate(),
+            accountId: from.id,
             type: TransactionType.transfer,
             amount: amount,
             isDebit: true,
@@ -106,8 +131,8 @@ class _TransferScreenState extends State<TransferScreen> {
         await _transactionRepository.addTransactionWithExecutor(
           txn,
           AccountTransaction(
-            id: '${id}_in',
-            accountId: _toAccount!.id,
+            id: IdGenerator.generate(),
+            accountId: to.id,
             type: TransactionType.transfer,
             amount: amount,
             isDebit: false,
@@ -119,8 +144,8 @@ class _TransferScreenState extends State<TransferScreen> {
 
         await txn.insert(DatabaseTables.transfers, {
           'id': id,
-          'from_account_id': _fromAccount!.id,
-          'to_account_id': _toAccount!.id,
+          'from_account_id': from.id,
+          'to_account_id': to.id,
           'amount': amount,
           'date': now.toIso8601String(),
           'notes': _notesController.text.trim().isEmpty
@@ -133,7 +158,7 @@ class _TransferScreenState extends State<TransferScreen> {
       _message('تم التحويل بنجاح');
       Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) _message('حصلت مشكلة، التحويل ما اتسجلش');
+      if (mounted) _message('حصلت مشكلة، التحويل ما اتسجلش: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -230,7 +255,7 @@ class _TransferScreenState extends State<TransferScreen> {
       initialValue: value,
       decoration: InputDecoration(labelText: label, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
       items: _accounts.map((account) => DropdownMenuItem(value: account, child: Text('${account.name} - ${account.balance.toStringAsFixed(2)} جنيه'))).toList(),
-      onChanged: onChanged,
+      onChanged: _saving ? null : onChanged,
     );
   }
 }

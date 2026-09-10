@@ -25,6 +25,7 @@ class CustomTextFormField extends StatelessWidget {
   });
 
   final TextEditingController? controller;
+  // Backward-compatible alias used by the journal-entry screen.
   final TextEditingController? openingBalanceController;
   final String? label;
   final String? hintText;
@@ -46,8 +47,6 @@ class CustomTextFormField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveController = controller ?? openingBalanceController;
-
     Widget? resolvedPrefixIcon;
     if (prefixIcon != null) {
       if (prefixIcon is IconData) {
@@ -72,6 +71,8 @@ class CustomTextFormField extends StatelessWidget {
             prefixIcon: resolvedPrefixIcon,
             border: border,
           );
+
+    final effectiveController = controller ?? openingBalanceController;
 
     return TextFormField(
       controller: effectiveController,

@@ -1,4 +1,5 @@
-import 'package:dafter/core/widgets/custom_text_form_field.dart';
+import 'package:flutter/material.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/model/account.dart';
@@ -9,852 +10,141 @@ import 'package:dafter/features/model/supplier.dart';
 import 'package:dafter/features/purchases/service/purchase_service.dart';
 import 'package:dafter/features/suppliers/repo/supplier_repository.dart';
 
-import 'package:flutter/material.dart';
-
 class PurchaseInvoiceScreen extends StatefulWidget {
   const PurchaseInvoiceScreen({super.key});
-
   @override
   State<PurchaseInvoiceScreen> createState() => _PurchaseInvoiceScreenState();
 }
 
 class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
-  final SupplierRepository _supplierRepository = SupplierRepository();
-  final ProductRepository _productRepository = ProductRepository();
-  final AccountRepository _accountRepository = AccountRepository();
-  final PurchaseService _purchaseService = PurchaseService();
+  final _supplierRepository = SupplierRepository();
+  final _productRepository = ProductRepository();
+  final _accountRepository = AccountRepository();
+  final _purchaseService = PurchaseService();
+  final _paidController = TextEditingController(text: '0');
+  final _notesController = TextEditingController();
+  Supplier? _supplier;
+  Account? _account;
+  final List<_Line> _items = [];
+  String _paymentType = 'نقدي';
+  bool _saving = false;
 
-  final paidController = TextEditingController();
-
-  Supplier? selectedSupplier;
-  Account? selectedAccount;
-
-  final List<_PurchaseLine> items = [];
-
-  String paymentType = 'نقدي';
-
-  bool _isSaving = false;
-
-  double get total {
-    return items.fold(0, (sum, item) => sum + item.total);
-  }
-
-  double get paid {
-    return double.tryParse(paidController.text.trim()) ?? 0;
-  }
-
-  double get remaining {
-    final value = total - paid;
-    return value < 0 ? 0 : value;
-  }
+  double get _subtotal => _items.fold(0, (s, i) => s + i.total);
+  double get _paid => double.tryParse(_paidController.text.trim()) ?? 0;
+  double get _remaining => (_subtotal - _paid).clamp(0, double.infinity).toDouble();
 
   @override
-  void dispose() {
-    paidController.dispose();
-    super.dispose();
-  }
+  void initState() { super.initState(); _paidController.addListener(_refresh); }
+  void _refresh() { if (mounted) setState(() {}); }
+  @override
+  void dispose() { _paidController.dispose(); _notesController.dispose(); super.dispose(); }
 
-  Future<void> selectSupplier() async {
+  Future<void> _selectSupplier() async {
     final suppliers = await _supplierRepository.getSuppliers();
-
     if (!mounted) return;
-
-    if (suppliers.isEmpty) {
-      _message('لا يوجد موردين. أضف مورد أولاً.');
-      return;
-    }
-
-    final supplier = await showDialog<Supplier>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('اختيار المورد'),
-          content: SizedBox(
-            width: 500,
-            height: 400,
-            child: ListView.separated(
-              itemCount: suppliers.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final supplier = suppliers[index];
-
-                return ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.store_outlined),
-                  ),
-                  title: Text(
-                    supplier.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(supplier.phone ?? 'بدون رقم هاتف'),
-                  trailing: Text(
-                    '${supplier.balance.toStringAsFixed(2)} ج.م',
-                    style: TextStyle(
-                      color: supplier.balance > 0 ? Colors.red : Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context, supplier);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (supplier == null) return;
-
-    setState(() {
-      selectedSupplier = supplier;
-    });
+    if (suppliers.isEmpty) { _message('لا يوجد موردين. أضف مورد أولاً.'); return; }
+    final selected = await showDialog<Supplier>(context: context, builder: (_) => AlertDialog(
+      title: const Text('اختيار المورد'),
+      content: SizedBox(width: 500, height: 420, child: ListView.builder(itemCount: suppliers.length, itemBuilder: (_, i) {
+        final s = suppliers[i];
+        return ListTile(title: Text(s.name), subtitle: Text(s.phone ?? 'بدون رقم هاتف'), trailing: Text('${s.balance.toStringAsFixed(2)} ج.م'), onTap: () => Navigator.pop(context, s));
+      })),
+    ));
+    if (selected != null && mounted) setState(() => _supplier = selected);
   }
 
-  Future<void> selectAccount() async {
+  Future<void> _selectAccount() async {
     final accounts = await _accountRepository.getAccounts();
-
     if (!mounted) return;
-
-    if (accounts.isEmpty) {
-      _message('لا يوجد حسابات. أضف حساب أولاً.');
-      return;
-    }
-
-    final account = await showDialog<Account>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('اختيار الحساب'),
-          content: SizedBox(
-            width: 500,
-            height: 400,
-            child: ListView.separated(
-              itemCount: accounts.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final account = accounts[index];
-
-                return ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.account_balance_wallet_outlined),
-                  ),
-                  title: Text(
-                    account.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(_accountTypeName(account.type)),
-                  trailing: Text(
-                    '${account.balance.toStringAsFixed(2)} ج.م',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context, account);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (account == null) return;
-
-    setState(() {
-      selectedAccount = account;
-    });
+    if (accounts.isEmpty) { _message('لا يوجد حسابات. أضف حساب أولاً.'); return; }
+    final selected = await showDialog<Account>(context: context, builder: (_) => AlertDialog(
+      title: const Text('اختيار الحساب'),
+      content: SizedBox(width: 500, height: 420, child: ListView.builder(itemCount: accounts.length, itemBuilder: (_, i) {
+        final a = accounts[i];
+        return ListTile(title: Text(a.name), subtitle: Text('${a.balance.toStringAsFixed(2)} ج.م'), onTap: () => Navigator.pop(context, a));
+      })),
+    ));
+    if (selected != null && mounted) setState(() => _account = selected);
   }
 
-  String _accountTypeName(AccountType type) {
-    switch (type) {
-      case AccountType.cash:
-        return 'خزنة';
-      case AccountType.bank:
-        return 'بنك';
-      case AccountType.expense:
-        return 'مصروفات';
-      case AccountType.income:
-        return 'إيرادات';
-      case AccountType.other:
-        return 'أخرى';
-    }
-  }
-
-  Future<void> addItem() async {
+  Future<void> _addItem() async {
     final products = await _productRepository.getProducts();
-
     if (!mounted) return;
-
-    if (products.isEmpty) {
-      _message('لا يوجد منتجات. أضف منتج أولاً.');
-      return;
-    }
-
-    final product = await showDialog<Product>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('اختيار المنتج'),
-          content: SizedBox(
-            width: 550,
-            height: 450,
-            child: ListView.separated(
-              itemCount: products.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final product = products[index];
-
-                return ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.inventory_2_outlined),
-                  ),
-                  title: Text(
-                    product.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    product.barcode == null
-                        ? 'بدون باركود'
-                        : 'باركود: ${product.barcode}',
-                  ),
-                  trailing: Text(
-                    '${product.purchasePrice.toStringAsFixed(2)} ج.م',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context, product);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (product == null) return;
-
-    if (!mounted) return;
-
-    final line = await showDialog<_PurchaseLine>(
-      context: context,
-      builder: (_) => _AddProductDialog(product: product),
-    );
-
-    if (line == null) return;
-
+    if (products.isEmpty) { _message('لا يوجد منتجات. أضف منتج أولاً.'); return; }
+    final product = await showDialog<Product>(context: context, builder: (_) => AlertDialog(
+      title: const Text('اختيار المنتج'),
+      content: SizedBox(width: 550, height: 450, child: ListView.builder(itemCount: products.length, itemBuilder: (_, i) {
+        final p = products[i];
+        return ListTile(title: Text(p.name), subtitle: Text('المخزون الحالي: ${p.quantity}'), trailing: Text('${p.purchasePrice.toStringAsFixed(2)} ج.م'), onTap: () => Navigator.pop(context, p));
+      })),
+    ));
+    if (product == null || !mounted) return;
+    final quantityController = TextEditingController(text: '1');
+    final priceController = TextEditingController(text: product.purchasePrice.toStringAsFixed(2));
+    final result = await showDialog<_Line>(context: context, builder: (_) => AlertDialog(
+      title: Text(product.name),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: quantityController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الكمية')),
+        const SizedBox(height: 12),
+        TextField(controller: priceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'سعر الشراء')),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')), FilledButton(onPressed: () {
+        final q = int.tryParse(quantityController.text.trim());
+        final price = double.tryParse(priceController.text.trim());
+        if (q == null || q <= 0 || price == null || !price.isFinite || price < 0) return;
+        Navigator.pop(context, _Line(product: product, quantity: q, price: price));
+      }, child: const Text('إضافة'))],
+    ));
+    quantityController.dispose(); priceController.dispose();
+    if (result == null || !mounted) return;
     setState(() {
-      final existingIndex = items.indexWhere(
-        (item) => item.product.id == line.product.id,
-      );
-
-      if (existingIndex != -1) {
-        items[existingIndex].quantity += line.quantity;
-        items[existingIndex].price = line.price;
-      } else {
-        items.add(line);
-      }
-
-      _updatePaidForPaymentType();
+      final index = _items.indexWhere((x) => x.product.id == result.product.id);
+      if (index >= 0) { _items[index].quantity += result.quantity; _items[index].price = result.price; }
+      else { _items.add(result); }
+      if (_paymentType == 'نقدي') _paidController.text = _subtotal.toStringAsFixed(2);
     });
   }
 
-  void _updatePaidForPaymentType() {
-    if (paymentType == 'نقدي') {
-      paidController.text = total.toStringAsFixed(2);
-    } else if (paymentType == 'آجل') {
-      paidController.text = '0';
-    }
-  }
-
-  void onPaymentTypeChanged(String? value) {
-    if (value == null) return;
-
-    setState(() {
-      paymentType = value;
-
-      if (value == 'نقدي') {
-        paidController.text = total.toStringAsFixed(2);
-      } else if (value == 'آجل') {
-        paidController.text = '0';
-      } else {
-        paidController.clear();
-      }
-    });
-  }
-
-  void removeItem(int index) {
-    setState(() {
-      items.removeAt(index);
-
-      if (paymentType == 'نقدي') {
-        paidController.text = total.toStringAsFixed(2);
-      }
-    });
-  }
-
-  Future<void> saveInvoice() async {
-    if (_isSaving) return;
-
-    if (selectedSupplier == null) {
-      _message('من فضلك اختر المورد');
-      return;
-    }
-
-    if (items.isEmpty) {
-      _message('أضف صنف واحد على الأقل');
-      return;
-    }
-
-    if (paid < 0) {
-      _message('المبلغ المدفوع غير صحيح');
-      return;
-    }
-
-    if (paid > total) {
-      _message('المبلغ المدفوع أكبر من إجمالي الفاتورة');
-      return;
-    }
-
-    if (paid > 0 && selectedAccount == null) {
-      _message('من فضلك اختر الحساب الذي تم الدفع منه');
-      return;
-    }
-
-    if (paid > 0 &&
-        selectedAccount != null &&
-        selectedAccount!.balance < paid) {
-      _message('رصيد الحساب غير كافٍ');
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-
+  Future<void> _save() async {
+    if (_saving) return;
+    if (_supplier == null) { _message('من فضلك اختر المورد'); return; }
+    if (_items.isEmpty) { _message('أضف صنف واحد على الأقل'); return; }
+    if (!_paid.isFinite || _paid < 0 || _paid > _subtotal) { _message('المبلغ المدفوع غير صحيح'); return; }
+    if (_paid > 0 && _account == null) { _message('اختر الحساب الذي تم الدفع منه'); return; }
+    setState(() => _saving = true);
     try {
-      final purchaseId = DateTime.now().microsecondsSinceEpoch.toString();
-
-      final purchaseItems = <PurchaseItem>[];
-
-      for (int i = 0; i < items.length; i++) {
-        final item = items[i];
-
-        purchaseItems.add(
-          PurchaseItem(
-            id: '${purchaseId}_$i',
-            purchaseId: purchaseId,
-            productId: item.product.id,
-            quantity: item.quantity,
-            price: item.price,
-            discount: item.discount,
-          ),
-        );
-      }
-
-      final purchase = Purchase(
-        id: purchaseId,
-        supplierId: selectedSupplier!.id,
-        date: DateTime.now(),
-        items: purchaseItems,
-        discount: 0,
-        paidAmount: paid,
-      );
-
-      await _purchaseService.createPurchase(
-        purchase: purchase,
-        accountId: selectedAccount?.id,
-      );
-
+      final purchaseId = IdGenerator.generate();
+      final purchase = Purchase(id: purchaseId, supplierId: _supplier!.id, date: DateTime.now(), items: _items.asMap().entries.map((e) => PurchaseItem(id: '${purchaseId}_${e.key}', purchaseId: purchaseId, productId: e.value.product.id, quantity: e.value.quantity, price: e.value.price, discount: 0)).toList(), discount: 0, paidAmount: _paid, notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim());
+      await _purchaseService.createPurchase(purchase: purchase, accountId: _account?.id);
       if (!mounted) return;
-
       _message('تم حفظ فاتورة الشراء بنجاح');
-
       Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-
-      _message(e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
+    } catch (e) { if (mounted) _message(e.toString().replaceFirst('Exception: ', '')); }
+    finally { if (mounted) setState(() => _saving = false); }
   }
 
-  void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
-    );
-  }
+  void _message(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8F9),
-      appBar: AppBar(
-        title: const Text('فاتورة شراء جديدة'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildSupplier(),
-            const SizedBox(height: 16),
-            _buildItems(),
-            const SizedBox(height: 16),
-            _buildPayment(),
-            const SizedBox(height: 20),
-            _buildSummary(),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _isSaving ? null : saveInvoice,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: Text(_isSaving ? 'جاري الحفظ...' : 'حفظ الفاتورة'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Directionality(textDirection: TextDirection.rtl, child: Scaffold(backgroundColor: const Color(0xFFF7F8F9), appBar: AppBar(title: const Text('فاتورة شراء جديدة'), backgroundColor: Colors.white, surfaceTintColor: Colors.white), body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _card('بيانات المورد', InkWell(onTap: _selectSupplier, child: InputDecorator(decoration: const InputDecoration(labelText: 'المورد', prefixIcon: Icon(Icons.store_outlined), border: OutlineInputBorder()), child: Text(_supplier?.name ?? 'اختر المورد')))),
+    const SizedBox(height: 16),
+    _card('أصناف الفاتورة', Column(children: [Align(alignment: Alignment.centerRight, child: FilledButton.icon(onPressed: _addItem, icon: const Icon(Icons.add), label: const Text('إضافة صنف'))), const SizedBox(height: 12), if (_items.isEmpty) const Padding(padding: EdgeInsets.all(30), child: Text('لم تتم إضافة أصناف')) else ..._items.asMap().entries.map((e) => ListTile(contentPadding: EdgeInsets.zero, title: Text(e.value.product.name), subtitle: Text('${e.value.quantity} × ${e.value.price.toStringAsFixed(2)} ج.م'), trailing: Row(mainAxisSize: MainAxisSize.min, children: [Text('${e.value.total.toStringAsFixed(2)} ج.م'), IconButton(onPressed: () => setState(() => _items.removeAt(e.key)), icon: const Icon(Icons.delete_outline, color: Colors.red))]))])),
+    const SizedBox(height: 16),
+    _card('الدفع', Column(children: [DropdownButtonFormField<String>(initialValue: _paymentType, decoration: const InputDecoration(labelText: 'طريقة الدفع', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'نقدي', child: Text('نقدي')), DropdownMenuItem(value: 'آجل', child: Text('آجل'))], onChanged: (v) { if (v == null) return; setState(() { _paymentType = v; _paidController.text = v == 'نقدي' ? _subtotal.toStringAsFixed(2) : '0'; }); }), const SizedBox(height: 12), TextFormField(controller: _paidController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'المدفوع', border: OutlineInputBorder())), const SizedBox(height: 12), if (_paid > 0) InkWell(onTap: _selectAccount, child: InputDecorator(decoration: const InputDecoration(labelText: 'الحساب', prefixIcon: Icon(Icons.account_balance_wallet_outlined), border: OutlineInputBorder()), child: Text(_account?.name ?? 'اختر الحساب'))), const SizedBox(height: 12), TextField(controller: _notesController, decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)', border: OutlineInputBorder()))])),
+    const SizedBox(height: 16),
+    _card('ملخص', Row(children: [Expanded(child: Text('الإجمالي: ${_subtotal.toStringAsFixed(2)} ج.م', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), Text('المتبقي: ${_remaining.toStringAsFixed(2)} ج.م')]))),
+    const SizedBox(height: 20),
+    FilledButton.icon(onPressed: _saving ? null : _save, icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_outlined), label: Text(_saving ? 'جاري الحفظ...' : 'حفظ الفاتورة'), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52))),
+  ])));
 
-  Widget _buildSupplier() {
-    return _Card(
-      title: 'بيانات المورد',
-      child: InkWell(
-        onTap: selectSupplier,
-        borderRadius: BorderRadius.circular(10),
-        child: InputDecorator(
-          decoration: InputDecoration(
-            labelText: 'المورد',
-            prefixIcon: const Icon(Icons.store_outlined),
-            suffixIcon: const Icon(Icons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-          child: Text(
-            selectedSupplier?.name ?? 'اختر المورد',
-            style: TextStyle(
-              color: selectedSupplier == null ? Colors.grey : Colors.black,
-              fontWeight: selectedSupplier == null
-                  ? FontWeight.normal
-                  : FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItems() {
-    return _Card(
-      title: 'أصناف الفاتورة',
-      action: ElevatedButton.icon(
-        onPressed: addItem,
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('إضافة صنف'),
-      ),
-      child: items.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.all(35),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 45,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'لم تتم إضافة أصناف',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'اضغط على إضافة صنف لإضافة المنتجات',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: items.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(child: Text('${index + 1}')),
-                  title: Text(
-                    item.product.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    '${item.quantity} × '
-                    '${item.price.toStringAsFixed(2)} ج.م',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${item.total.toStringAsFixed(2)} ج.م',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        onPressed: () {
-                          removeItem(index);
-                        },
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-    );
-  }
-
-  Widget _buildPayment() {
-    return _Card(
-      title: 'طريقة الدفع',
-      child: Column(
-        children: [
-          DropdownButtonFormField<String>(
-            initialValue: paymentType,
-            decoration: InputDecoration(
-              labelText: 'طريقة الدفع',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'نقدي', child: Text('نقدي')),
-              DropdownMenuItem(value: 'آجل', child: Text('آجل')),
-              DropdownMenuItem(value: 'جزئي', child: Text('جزئي')),
-            ],
-            onChanged: onPaymentTypeChanged,
-          ),
-          const SizedBox(height: 14),
-          if (paid > 0 || paymentType != 'آجل') ...[
-            InkWell(
-              onTap: selectAccount,
-              borderRadius: BorderRadius.circular(10),
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: 'الحساب',
-                  prefixIcon: const Icon(
-                    Icons.account_balance_wallet_outlined,
-                  ),
-                  suffixIcon: const Icon(Icons.arrow_drop_down),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  selectedAccount?.name ?? 'اختر الحساب',
-                  style: TextStyle(
-                    color: selectedAccount == null
-                        ? Colors.grey
-                        : Colors.black,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
-          CustomTextFormField(
-            controller: paidController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) {
-              setState(() {});
-            },
-            decoration: InputDecoration(
-              labelText: 'المبلغ المدفوع',
-              suffixText: 'ج.م',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummary() {
-    return _Card(
-      title: 'ملخص الفاتورة',
-      child: Column(
-        children: [
-          _SummaryRow(
-            title: 'الإجمالي',
-            value: '${total.toStringAsFixed(2)} ج.م',
-          ),
-          _SummaryRow(
-            title: 'المدفوع',
-            value: '${paid.toStringAsFixed(2)} ج.م',
-          ),
-          const Divider(),
-          _SummaryRow(
-            title: 'المتبقي',
-            value: '${remaining.toStringAsFixed(2)} ج.م',
-            bold: true,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _card(String title, Widget child) => Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const SizedBox(height: 14), child]));
 }
 
-class _PurchaseLine {
+class _Line {
   final Product product;
-
   int quantity;
   double price;
-  double discount;
-
-  _PurchaseLine({
-    required this.product,
-    required this.quantity,
-    required this.price,
-    this.discount = 0,
-  });
-
-  double get total {
-    return (quantity * price) - discount;
-  }
-}
-
-class _AddProductDialog extends StatefulWidget {
-  final Product product;
-
-  const _AddProductDialog({required this.product});
-
-  @override
-  State<_AddProductDialog> createState() => _AddProductDialogState();
-}
-
-class _AddProductDialogState extends State<_AddProductDialog> {
-  late final TextEditingController priceController;
-  final quantityController = TextEditingController(text: '1');
-  final discountController = TextEditingController(text: '0');
-
-  @override
-  void initState() {
-    super.initState();
-
-    priceController = TextEditingController(
-      text: widget.product.purchasePrice.toStringAsFixed(2),
-    );
-  }
-
-  @override
-  void dispose() {
-    priceController.dispose();
-    quantityController.dispose();
-    discountController.dispose();
-
-    super.dispose();
-  }
-
-  void add() {
-    final price = double.tryParse(priceController.text.trim());
-    final quantity = int.tryParse(quantityController.text.trim());
-    final discount = double.tryParse(discountController.text.trim()) ?? 0;
-
-    if (price == null || price < 0) {
-      _message('أدخل سعر شراء صحيح');
-      return;
-    }
-
-    if (quantity == null || quantity <= 0) {
-      _message('أدخل كمية صحيحة');
-      return;
-    }
-
-    if (discount < 0) {
-      _message('الخصم غير صحيح');
-      return;
-    }
-
-    final subtotal = price * quantity;
-
-    if (discount > subtotal) {
-      _message('الخصم أكبر من قيمة الصنف');
-      return;
-    }
-
-    Navigator.pop(
-      context,
-      _PurchaseLine(
-        product: widget.product,
-        quantity: quantity,
-        price: price,
-        discount: discount,
-      ),
-    );
-  }
-
-  void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('إضافة ${widget.product.name}'),
-      content: SizedBox(
-        width: 450,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CustomTextFormField(
-              controller: priceController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'سعر الشراء',
-                suffixText: 'ج.م',
-              ),
-            ),
-            const SizedBox(height: 12),
-            CustomTextFormField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'الكمية'),
-            ),
-            const SizedBox(height: 12),
-            CustomTextFormField(
-              controller: discountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'الخصم',
-                suffixText: 'ج.م',
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('إلغاء'),
-        ),
-        ElevatedButton(onPressed: add, child: const Text('إضافة')),
-      ],
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  final String title;
-  final Widget child;
-  final Widget? action;
-
-  const _Card({required this.title, required this.child, this.action});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E9EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              ?action,
-            ],
-          ),
-          const SizedBox(height: 18),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  final String title;
-  final String value;
-  final bool bold;
-
-  const _SummaryRow({
-    required this.title,
-    required this.value,
-    this.bold = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        children: [
-          Text(title),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-              fontSize: bold ? 17 : 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  _Line({required this.product, required this.quantity, required this.price});
+  double get total => quantity * price;
 }

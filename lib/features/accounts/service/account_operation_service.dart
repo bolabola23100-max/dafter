@@ -1,5 +1,6 @@
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/model/account_transaction.dart';
 import 'package:dafter/features/model/payment.dart';
 
@@ -16,7 +17,8 @@ class AccountOperationService {
     String? personName,
     String? notes,
   }) async {
-    if (amount <= 0) throw Exception('المبلغ لازم يكون أكبر من صفر');
+    if (accountId.trim().isEmpty) throw Exception('اختار الحساب الأول');
+    if (!amount.isFinite || amount <= 0) throw Exception('المبلغ لازم يكون أكبر من صفر');
 
     final db = await _database.database;
 
@@ -31,15 +33,18 @@ class AccountOperationService {
       if (accountRows.isEmpty) throw Exception('الحساب مش موجود');
 
       final balance = (accountRows.first['balance'] as num).toDouble();
+      if (!balance.isFinite) throw Exception('رصيد الحساب غير صالح');
       if (type == PaymentType.payment && amount > balance) {
         throw Exception('الرصيد في الحساب مش كفاية');
       }
 
       final now = DateTime.now();
-      final id = now.microsecondsSinceEpoch.toString();
+      final id = IdGenerator.generate();
       final newBalance = type == PaymentType.receipt
           ? balance + amount
           : balance - amount;
+
+      if (!newBalance.isFinite) throw Exception('الرصيد الناتج غير صالح');
 
       await txn.insert(DatabaseTables.payments, {
         'id': id,
@@ -53,7 +58,7 @@ class AccountOperationService {
       });
 
       await txn.insert(DatabaseTables.accountTransactions, {
-        'id': 'tx_$id',
+        'id': IdGenerator.generate(),
         'account_id': accountId,
         'type': type == PaymentType.receipt
             ? TransactionType.receipt.name

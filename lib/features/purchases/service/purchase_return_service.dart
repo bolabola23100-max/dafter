@@ -1,5 +1,6 @@
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
@@ -30,14 +31,12 @@ class PurchaseReturnService {
     AccountRepository? accountRepository,
     AccountTransactionRepository? accountTransactionRepository,
   }) : _database = database ?? AppDatabase.instance,
-       _purchaseRepository = purchaseRepository ?? PurchaseRepository(),
-       _returnRepository = returnRepository ?? PurchaseReturnRepository(),
-       _productRepository = productRepository ?? ProductRepository(),
-       _supplierRepository = supplierRepository ?? SupplierRepository(),
-       _accountRepository = accountRepository ?? AccountRepository(),
-       _transactionRepository = accountTransactionRepository ?? AccountTransactionRepository();
-
-  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
+       _purchaseRepository = purchaseRepository ?? PurchaseRepository(database: database ?? AppDatabase.instance),
+       _returnRepository = returnRepository ?? PurchaseReturnRepository(database: database ?? AppDatabase.instance),
+       _productRepository = productRepository ?? ProductRepository(database: database ?? AppDatabase.instance),
+       _supplierRepository = supplierRepository ?? SupplierRepository(database: database ?? AppDatabase.instance),
+       _accountRepository = accountRepository ?? AccountRepository(database: database ?? AppDatabase.instance),
+       _transactionRepository = accountTransactionRepository ?? AccountTransactionRepository(database: database ?? AppDatabase.instance);
 
   Future<void> createReturn({
     required String purchaseId,
@@ -57,6 +56,7 @@ class PurchaseReturnService {
     if (purchase == null) throw Exception('فاتورة الشراء مش موجودة');
     if (purchase.supplierId == null) throw Exception('الفاتورة دي مفيهاش مورد');
 
+    final returnDate = date ?? DateTime.now();
     final db = await _database.database;
     await db.transaction((txn) async {
       final supplier = await _supplierRepository.getSupplierByIdWithExecutor(txn, purchase.supplierId!);
@@ -79,7 +79,7 @@ class PurchaseReturnService {
           .clamp(0.0, double.infinity)
           .toDouble();
 
-      final purchaseItems = await _purchaseRepository.getPurchaseItems(purchaseId);
+      final purchaseItems = await _purchaseRepository.getPurchaseItemsWithExecutor(txn, purchaseId);
       final oldReturnRows = await txn.query(
         DatabaseTables.purchaseReturnItems,
         columns: ['purchase_item_id', 'quantity'],
@@ -93,6 +93,18 @@ class PurchaseReturnService {
         returnedByPurchaseItem[id] = (returnedByPurchaseItem[id] ?? 0) + (row['quantity'] as int);
       }
 
+      // Aggregate quantities in the current request too. Otherwise the same
+      // purchase item could be submitted twice and bypass the per-row limit.
+      final requestedByPurchaseItem = <String, int>{};
+      for (final item in items) {
+        if (item.quantity <= 0) throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
+        requestedByPurchaseItem.update(
+          item.purchaseItemId,
+          (quantity) => quantity + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+
       final purchaseItemById = <String, PurchaseItem>{
         for (final item in purchaseItems) item.id: item,
       };
@@ -102,10 +114,10 @@ class PurchaseReturnService {
         final original = purchaseItemById[item.purchaseItemId];
         if (original == null) throw Exception('في صنف من المرتجع مش موجود في الفاتورة');
         if (item.productId != original.productId) throw Exception('بيانات الصنف مش متطابقة مع الفاتورة');
-        if (item.quantity <= 0) throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
 
         final alreadyReturned = returnedByPurchaseItem[item.purchaseItemId] ?? 0;
-        if (alreadyReturned + item.quantity > original.quantity) {
+        final requestedQuantity = requestedByPurchaseItem[item.purchaseItemId] ?? 0;
+        if (alreadyReturned + requestedQuantity > original.quantity) {
           throw Exception('مينفعش ترجع كمية أكبر من اللي اتشرت');
         }
 
@@ -141,7 +153,7 @@ class PurchaseReturnService {
         );
       }
 
-      final returnId = _newId();
+      final returnId = IdGenerator.generate();
       final finalItems = adjustedItems
           .map((item) => PurchaseReturnItem(
                 id: item.id,
@@ -158,11 +170,11 @@ class PurchaseReturnService {
         if (product == null) throw Exception('المنتج مش موجود');
         await _productRepository.updateStockWithExecutor(txn, item.productId, product.quantity - item.quantity);
         await txn.insert(DatabaseTables.stockMovements, {
-          'id': _newId(),
+          'id': IdGenerator.generate(),
           'product_id': item.productId,
           'type': StockMovementType.purchaseReturn.name,
           'quantity': -item.quantity,
-          'date': (date ?? DateTime.now()).toIso8601String(),
+          'date': returnDate.toIso8601String(),
           'reference_id': returnId,
           'notes': notes,
         });
@@ -175,7 +187,7 @@ class PurchaseReturnService {
           id: returnId,
           purchaseId: purchaseId,
           supplierId: supplier.id,
-          date: date ?? DateTime.now(),
+          date: returnDate,
           items: finalItems,
           refundedAmount: refundedAmount,
           notes: notes,
@@ -197,25 +209,25 @@ class PurchaseReturnService {
         if (account == null) throw Exception('الحساب اللي هتدخل فيه الفلوس مش موجود');
 
         await txn.insert(DatabaseTables.payments, {
-          'id': _newId(),
+          'id': IdGenerator.generate(),
           'type': PaymentType.receipt.name,
           'person_type': 'supplier',
           'person_id': supplier.id,
           'account_id': account.id,
           'amount': refundedAmount,
-          'date': (date ?? DateTime.now()).toIso8601String(),
+          'date': returnDate.toIso8601String(),
           'notes': 'فلوس راجعة من مرتجع شراء${notes == null ? '' : ' - $notes'}',
         });
 
         await _transactionRepository.addTransactionWithExecutor(
           txn,
           AccountTransaction(
-            id: _newId(),
+            id: IdGenerator.generate(),
             accountId: account.id,
             type: TransactionType.receipt,
             amount: refundedAmount,
             isDebit: false,
-            date: date ?? DateTime.now(),
+            date: returnDate,
             referenceId: returnId,
             description: 'فلوس راجعة من المورد - مرتجع شراء',
           ),
