@@ -1,5 +1,6 @@
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/core/database/database_tables.dart';
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/model/account_transaction.dart';
@@ -16,18 +17,24 @@ class CustomerPaymentService {
     required double amount,
     String? notes,
   }) async {
-    if (amount <= 0) throw Exception('المبلغ لازم يكون أكبر من صفر');
+    if (!amount.isFinite || amount <= 0) {
+      throw Exception('المبلغ لازم يكون أكبر من صفر');
+    }
 
     final db = await _database.database;
     await db.transaction((txn) async {
       final customer = await _customerRepository.getCustomerByIdWithExecutor(txn, customerId);
       if (customer == null) throw Exception('العميل مش موجود');
+      if (!customer.balance.isFinite || customer.balance <= 0) {
+        throw Exception('العميل ملوش رصيد مستحق للتحصيل');
+      }
       if (amount > customer.balance) throw Exception('المبلغ أكبر من اللي على العميل');
 
       final account = await _accountRepository.getAccountByIdWithExecutor(txn, accountId);
       if (account == null) throw Exception('الحساب مش موجود');
+      if (!account.balance.isFinite) throw Exception('رصيد الحساب غير صالح');
 
-      final paymentId = DateTime.now().microsecondsSinceEpoch.toString();
+      final paymentId = IdGenerator.generate();
       final now = DateTime.now();
       final payment = Payment(
         id: paymentId,
@@ -51,7 +58,7 @@ class CustomerPaymentService {
       });
 
       final transaction = AccountTransaction(
-        id: '${paymentId}_txn',
+        id: IdGenerator.generate(),
         accountId: accountId,
         type: TransactionType.receipt,
         amount: amount,
