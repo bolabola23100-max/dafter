@@ -1,3 +1,4 @@
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Products/services/category_service.dart';
 import 'package:dafter/features/Products/services/product_service.dart';
 import 'package:dafter/features/model/category.dart';
@@ -16,7 +17,6 @@ class AddProductScreen extends StatefulWidget {
 class _AddProductScreenState extends State<AddProductScreen> {
   final ProductService _productService = ProductService();
   final CategoryService _categoryService = CategoryService();
-
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -27,21 +27,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _minStockController = TextEditingController();
 
   String? selectedCategory;
-  String? selectedSupplier;
-
   List<Category> _categories = [];
   bool _isLoadingCategories = true;
-
-  bool enableWholesalePrices = false;
+  bool _isSaving = false;
 
   bool get _isEditing => widget.productToEdit != null;
 
   @override
   void initState() {
     super.initState();
-
     final product = widget.productToEdit;
-
     if (product != null) {
       _nameController.text = product.name;
       _codeController.text = product.barcode ?? '';
@@ -49,32 +44,29 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _salePriceController.text = product.sellingPrice.toString();
       _quantityController.text = product.quantity.toString();
       _minStockController.text = product.minQuantity.toString();
-
       selectedCategory = product.categoryId;
     }
-
     _loadCategories();
   }
 
-  // =========================================================
-  // Load Categories
-  // =========================================================
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _codeController.dispose();
+    _purchasePriceController.dispose();
+    _salePriceController.dispose();
+    _quantityController.dispose();
+    _minStockController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadCategories() async {
     try {
-      setState(() {
-        _isLoadingCategories = true;
-      });
-
       final categories = await _categoryService.getCategories();
-
       if (!mounted) return;
-
       setState(() {
         _categories = categories;
         _isLoadingCategories = false;
-
-        // لو المنتج اللي بنعدله كان مرتبط بتصنيف اتحذف
         if (selectedCategory != null &&
             !_categories.any((category) => category.id == selectedCategory)) {
           selectedCategory = null;
@@ -82,63 +74,47 @@ class _AddProductScreenState extends State<AddProductScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        _isLoadingCategories = false;
-      });
-
-      _showMessage(
-        'حدث خطأ أثناء تحميل التصنيفات: '
-        '${e.toString().replaceFirst('Exception: ', '')}',
-      );
+      setState(() => _isLoadingCategories = false);
+      _showMessage(_cleanError(e));
     }
   }
 
-  // =========================================================
-  // Save Product
-  // =========================================================
-
   Future<void> _saveProduct() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (_isSaving || !_formKey.currentState!.validate()) return;
 
     final purchasePrice = double.tryParse(_purchasePriceController.text.trim());
-
     final sellingPrice = double.tryParse(_salePriceController.text.trim());
-
     final quantity = int.tryParse(_quantityController.text.trim());
-
     final minQuantity = int.tryParse(_minStockController.text.trim());
 
-    if (purchasePrice == null || purchasePrice < 0) {
+    if (purchasePrice == null || !purchasePrice.isFinite || purchasePrice < 0) {
       _showMessage('سعر الشراء غير صحيح');
       return;
     }
-
-    if (sellingPrice == null || sellingPrice < 0) {
+    if (sellingPrice == null || !sellingPrice.isFinite || sellingPrice < 0) {
       _showMessage('سعر البيع غير صحيح');
       return;
     }
-
     if (quantity == null || quantity < 0) {
       _showMessage('الكمية غير صحيحة');
       return;
     }
-
     if (minQuantity == null || minQuantity < 0) {
       _showMessage('الحد الأدنى للمخزون غير صحيح');
       return;
     }
 
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _showMessage('اسم المنتج مطلوب');
+      return;
+    }
+
+    final barcode = _codeController.text.trim();
     final product = Product(
-      id:
-          widget.productToEdit?.id ??
-          DateTime.now().microsecondsSinceEpoch.toString(),
-      name: _nameController.text.trim(),
-      barcode: _codeController.text.trim().isEmpty
-          ? null
-          : _codeController.text.trim(),
+      id: widget.productToEdit?.id ?? IdGenerator.generate(),
+      name: name,
+      barcode: barcode.isEmpty ? null : barcode,
       categoryId: selectedCategory,
       purchasePrice: purchasePrice,
       sellingPrice: sellingPrice,
@@ -146,36 +122,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
       minQuantity: minQuantity,
     );
 
+    setState(() => _isSaving = true);
     try {
       if (_isEditing) {
         await _productService.updateProduct(product);
       } else {
         await _productService.addProduct(product);
       }
-
       if (!mounted) return;
-
-      _showMessage(
-        _isEditing ? 'تم تعديل المنتج بنجاح' : 'تم إضافة المنتج بنجاح',
-      );
-
       Navigator.pop(context, true);
     } catch (e) {
-      if (!mounted) return;
-
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) _showMessage(_cleanError(e));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
+  String _cleanError(Object error) =>
+      error.toString().replaceFirst('Exception: ', '');
 
-  // =========================================================
-  // Build
-  // =========================================================
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +154,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
         body: Column(
           children: [
             _buildHeader(),
-
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -199,17 +166,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildBasicInfoCard(),
-
                           const SizedBox(height: 16),
-
                           _buildPricingCard(),
-
                           const SizedBox(height: 16),
-
                           _buildStockCard(),
-
                           const SizedBox(height: 16),
-
                           _buildBottomActions(),
                         ],
                       ),
@@ -224,10 +185,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // =========================================================
-  // Header
-  // =========================================================
-
   Widget _buildHeader() {
     return Container(
       height: 72,
@@ -239,21 +196,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: _isSaving ? null : () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back, size: 21),
           ),
-
           const SizedBox(width: 10),
-
           Text(
             _isEditing ? 'تعديل المنتج' : 'إضافة منتج جديد',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
-
           const Spacer(),
-
           TextButton.icon(
-            onPressed: () => Navigator.pop(context),
+            onPressed: _isSaving ? null : () => Navigator.pop(context),
             icon: const Icon(Icons.close, size: 18),
             label: const Text('إلغاء'),
           ),
@@ -261,10 +214,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       ),
     );
   }
-
-  // =========================================================
-  // Basic Information
-  // =========================================================
 
   Widget _buildBasicInfoCard() {
     return _SectionCard(
@@ -283,9 +232,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   required: true,
                 ),
               ),
-
               const SizedBox(width: 16),
-
               Expanded(
                 child: _buildCustomTextFormField(
                   controller: _codeController,
@@ -295,38 +242,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          Row(
-            children: [
-              Expanded(child: _buildCategoryDropdown()),
-
-              const SizedBox(width: 16),
-
-              Expanded(
-                child: _buildDropdown(
-                  label: 'المورد',
-                  value: selectedSupplier,
-                  hint: 'اختر المورد',
-                  items: const [],
-                  onChanged: (value) {
-                    setState(() {
-                      selectedSupplier = value;
-                    });
-                  },
-                ),
-              ),
-            ],
-          ),
+          _buildCategoryDropdown(),
         ],
       ),
     );
   }
-
-  // =========================================================
-  // Category Dropdown
-  // =========================================================
 
   Widget _buildCategoryDropdown() {
     return DropdownButtonFormField<String>(
@@ -335,10 +256,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         labelText: 'التصنيف',
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: Color(0xFFE5E9EB)),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(9),
           borderSide: const BorderSide(color: Color(0xFFE5E9EB)),
@@ -352,26 +270,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ? const Text('جاري تحميل التصنيفات...')
           : const Text('اختر التصنيف'),
       items: _categories
-          .map(
-            (category) => DropdownMenuItem<String>(
-              value: category.id,
-              child: Text(category.name),
-            ),
-          )
+          .map((category) => DropdownMenuItem<String>(
+                value: category.id,
+                child: Text(category.name),
+              ))
           .toList(),
-      onChanged: _isLoadingCategories
+      onChanged: (_isLoadingCategories || _isSaving)
           ? null
-          : (value) {
-              setState(() {
-                selectedCategory = value;
-              });
-            },
+          : (value) => setState(() => selectedCategory = value),
     );
   }
-
-  // =========================================================
-  // Pricing
-  // =========================================================
 
   Widget _buildPricingCard() {
     return _SectionCard(
@@ -385,29 +293,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
               label: 'سعر الشراء',
               hint: '0.00',
               suffix: 'ج.م',
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
           ),
-
           const SizedBox(width: 16),
-
           Expanded(
             child: _buildCustomTextFormField(
               controller: _salePriceController,
               label: 'سعر البيع',
               hint: '0.00',
               suffix: 'ج.م',
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
           ),
         ],
       ),
     );
   }
-
-  // =========================================================
-  // Stock
-  // =========================================================
 
   Widget _buildStockCard() {
     return _SectionCard(
@@ -424,9 +326,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               keyboardType: TextInputType.number,
             ),
           ),
-
           const SizedBox(width: 16),
-
           Expanded(
             child: _buildCustomTextFormField(
               controller: _minStockController,
@@ -441,28 +341,28 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // =========================================================
-  // Bottom Actions
-  // =========================================================
-
   Widget _buildBottomActions() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         OutlinedButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
           ),
           child: const Text('إلغاء'),
         ),
-
         const SizedBox(width: 12),
-
         ElevatedButton.icon(
-          onPressed: _saveProduct,
-          icon: const Icon(Icons.check, size: 19),
-          label: Text(_isEditing ? 'حفظ التعديلات' : 'حفظ المنتج'),
+          onPressed: _isSaving ? null : _saveProduct,
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.check, size: 19),
+          label: Text(_isSaving ? 'جاري الحفظ...' : (_isEditing ? 'حفظ التعديلات' : 'حفظ المنتج')),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
           ),
@@ -470,10 +370,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       ],
     );
   }
-
-  // =========================================================
-  // Text Form Field
-  // =========================================================
 
   Widget _buildCustomTextFormField({
     required TextEditingController controller,
@@ -486,16 +382,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      enabled: !_isSaving,
       decoration: InputDecoration(
         labelText: required ? '$label *' : label,
         hintText: hint,
         suffixText: suffix,
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: Color(0xFFE5E9EB)),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(9),
           borderSide: const BorderSide(color: Color(0xFFE5E9EB)),
@@ -506,68 +400,18 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ),
       ),
       validator: required
-          ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'هذا الحقل مطلوب';
-              }
-
-              return null;
-            }
+          ? (value) => value == null || value.trim().isEmpty ? 'هذا الحقل مطلوب' : null
           : null,
     );
   }
-
-  // =========================================================
-  // Generic Dropdown
-  // =========================================================
-
-  Widget _buildDropdown({
-    required String label,
-    required String? value,
-    required String hint,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: Color(0xFFE5E9EB)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(9),
-          borderSide: const BorderSide(color: Color(0xFFE5E9EB)),
-        ),
-      ),
-      hint: Text(hint),
-      items: items
-          .map(
-            (item) => DropdownMenuItem<String>(value: item, child: Text(item)),
-          )
-          .toList(),
-      onChanged: onChanged,
-    );
-  }
 }
-
-// =========================================================
-// Section Card
-// =========================================================
 
 class _SectionCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
 
-  const _SectionCard({
-    required this.title,
-    required this.icon,
-    required this.child,
-  });
+  const _SectionCard({required this.title, required this.icon, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -575,30 +419,20 @@ class _SectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFE5E9EB)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(icon, size: 19, color: const Color(0xFF0E4C4C)),
-
-              const SizedBox(width: 8),
-
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Icon(icon, size: 21),
+              const SizedBox(width: 9),
+              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
-
           const SizedBox(height: 18),
-
           child,
         ],
       ),
