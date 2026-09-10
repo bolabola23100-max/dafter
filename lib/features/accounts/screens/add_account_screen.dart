@@ -46,13 +46,13 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
 
   Future<void> _saveAccount() async {
     if (_isSaving) return;
-
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameController.text.trim();
-    final balance = double.tryParse(_openingBalanceController.text.trim()) ?? 0;
+    final rawBalance = _openingBalanceController.text.trim();
+    final balance = rawBalance.isEmpty ? 0.0 : double.tryParse(rawBalance);
 
-    if (balance < 0) {
+    if (balance == null || !balance.isFinite || balance < 0) {
       _message('الرصيد الافتتاحي غير صحيح');
       return;
     }
@@ -77,9 +77,7 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
       if (!mounted) return;
       _message('تعذر حفظ الحساب: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -92,9 +90,7 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('إضافة حساب'),
-      ),
+      appBar: AppBar(title: const Text('إضافة حساب')),
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
@@ -102,7 +98,7 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
           child: Column(
             children: [
               CustomTextFormField(
-                openingBalanceController: _nameController,
+                controller: _nameController,
                 hintText: 'اسم الحساب',
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -128,20 +124,18 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
                 onChanged: _isSaving
                     ? null
                     : (value) {
-                        if (value != null) {
-                          setState(() => _type = value);
-                        }
+                        if (value != null) setState(() => _type = value);
                       },
               ),
               const SizedBox(height: 16),
               CustomTextFormField(
-                openingBalanceController: _openingBalanceController,
+                controller: _openingBalanceController,
                 hintText: 'الرصيد الافتتاحي',
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) return null;
                   final balance = double.tryParse(value.trim());
-                  if (balance == null || balance < 0) {
+                  if (balance == null || !balance.isFinite || balance < 0) {
                     return 'أدخل رصيدًا صحيحًا';
                   }
                   return null;
