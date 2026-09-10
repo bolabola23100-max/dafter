@@ -9,15 +9,21 @@ class AccountRepository {
   AccountRepository({AppDatabase? database})
     : _database = database ?? AppDatabase.instance;
 
-  Future<void> addAccount(Account account) async {
+  void _validateAccount(Account account) {
+    if (account.id.trim().isEmpty) throw ArgumentError('معرف الحساب غير صالح');
+    if (account.name.trim().isEmpty) throw ArgumentError('اسم الحساب مطلوب');
     if (!account.openingBalance.isFinite || !account.balance.isFinite) {
       throw ArgumentError('رصيد الحساب غير صالح');
     }
+  }
+
+  Future<void> addAccount(Account account) async {
+    _validateAccount(account);
 
     final db = await _database.database;
     await db.insert(DatabaseTables.accounts, {
       'id': account.id,
-      'name': account.name,
+      'name': account.name.trim(),
       'type': account.type.name,
       'opening_balance': account.openingBalance,
       'balance': account.balance,
@@ -81,15 +87,13 @@ class AccountRepository {
   }
 
   Future<void> updateAccount(Account account) async {
-    if (!account.openingBalance.isFinite || !account.balance.isFinite) {
-      throw ArgumentError('رصيد الحساب غير صالح');
-    }
+    _validateAccount(account);
 
     final db = await _database.database;
     final updated = await db.update(
       DatabaseTables.accounts,
       {
-        'name': account.name,
+        'name': account.name.trim(),
         'type': account.type.name,
         'opening_balance': account.openingBalance,
         'balance': account.balance,
