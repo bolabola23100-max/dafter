@@ -61,7 +61,7 @@ class _TransferScreenState extends State<TransferScreen> {
       _message('مينفعش تحول لنفس الحساب');
       return;
     }
-    if (amount == null || amount <= 0) {
+    if (amount == null || !amount.isFinite || amount <= 0) {
       _message('اكتب مبلغ صحيح');
       return;
     }
@@ -76,8 +76,6 @@ class _TransferScreenState extends State<TransferScreen> {
           : _notesController.text.trim();
 
       await db.transaction((txn) async {
-        // Re-read both accounts inside the transaction so a stale screen
-        // balance cannot cause an invalid transfer.
         final from = await _accountRepository.getAccountByIdWithExecutor(
           txn,
           _fromAccount!.id,
@@ -93,19 +91,28 @@ class _TransferScreenState extends State<TransferScreen> {
         if (from.id == to.id) {
           throw Exception('مينفعش تحول لنفس الحساب');
         }
+        if (!from.balance.isFinite || !to.balance.isFinite) {
+          throw Exception('رصيد أحد الحسابات غير صالح');
+        }
         if (from.balance < amount) {
           throw Exception('رصيد الحساب اللي هتسحب منه مش مكفي');
+        }
+
+        final newFromBalance = from.balance - amount;
+        final newToBalance = to.balance + amount;
+        if (!newFromBalance.isFinite || !newToBalance.isFinite) {
+          throw Exception('الرصيد الناتج غير صالح');
         }
 
         await _accountRepository.updateBalanceWithExecutor(
           txn,
           from.id,
-          from.balance - amount,
+          newFromBalance,
         );
         await _accountRepository.updateBalanceWithExecutor(
           txn,
           to.id,
-          to.balance + amount,
+          newToBalance,
         );
 
         await _transactionRepository.addTransactionWithExecutor(
