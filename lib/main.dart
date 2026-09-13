@@ -9,7 +9,6 @@ import 'core/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
-  await windowManager.setPreventClose(true);
 
   await AppDatabase.instance.database;
   // A backup failure must never prevent the POS from starting. The user can
@@ -36,6 +35,9 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    // Register the listener first, then intercept the native Windows X.
+    // Doing this here guarantees the close event is delivered to this state.
+    windowManager.setPreventClose(true);
   }
 
   @override
@@ -48,10 +50,10 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
     if (_closingWindow) return;
     _closingWindow = true;
 
-    // The native X button is intercepted by setPreventClose(true). Once the
-    // user has confirmed, disable interception before forcing the window out.
+    // Let the native close operation proceed normally after the user has
+    // made a decision. Using close() keeps the behavior of the standard X.
     await windowManager.setPreventClose(false);
-    await windowManager.destroy();
+    await windowManager.close();
   }
 
   @override
