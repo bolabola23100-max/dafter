@@ -116,15 +116,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .toDouble();
   }
 
-  double get _todayTotal {
-    final now = DateTime.now();
-    final sales = _todaySales.fold<double>(0, (sum, sale) => sum + sale.total);
-    final returns = _saleReturns
-        .where((r) => _sameDay(r.date, now))
-        .fold<double>(0, (sum, r) => sum + r.total);
-    return sales - returns;
-  }
-
   double get _todayProfit {
     final now = DateTime.now();
     var profit = _todaySales.fold<double>(
