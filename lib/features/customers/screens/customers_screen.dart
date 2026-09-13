@@ -250,32 +250,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
     ).then((_) => _loadCustomers());
   }
 
-  void _showCustomerDetails(Customer customer) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(customer.name),
-        content: Text(
-          'الرصيد الحالي: ${customer.balance.toStringAsFixed(2)} جنيه\n\n'
-          '${customer.balance > 0 ? 'العميل عليه فلوس.' : 'مفيش عليه فلوس حالياً.'}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('تمام'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Nav.push(
-                context,
-                CustomerStatementScreen(customerId: customer.id),
-              );
-            },
-            child: const Text('كشف الحساب'),
-          ),
-        ],
-      ),
+  Future<void> _showCustomerDetails(Customer customer) async {
+    await Nav.push(
+      context,
+      CustomerStatementScreen(customerId: customer.id),
     );
+    if (mounted) await _loadCustomers();
   }
 }
