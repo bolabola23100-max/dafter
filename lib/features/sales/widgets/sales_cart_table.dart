@@ -31,75 +31,64 @@ class SalesCartTable extends StatelessWidget {
       );
     }
 
-    return DataTable(
-      columnSpacing: 20,
-      columns: const [
-        DataColumn(label: Text('#')),
-        DataColumn(label: Text('الصنف')),
-        DataColumn(label: Text('السعر')),
-        DataColumn(label: Text('الكمية')),
-        DataColumn(label: Text('الإجمالي')),
-        DataColumn(label: Text('حذف')),
-      ],
-      rows: cartItems.asMap().entries.map((entry) {
-        final index = entry.key;
-        final item = entry.value;
-        return DataRow(
-          cells: [
-            DataCell(Text('${index + 1}')),
-            DataCell(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item.productName,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    item.sku,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            DataCell(Text('${item.price.toStringAsFixed(2)} ر.س')),
-            DataCell(
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.remove_circle_outline,
-                      size: 18,
-                    ),
-                    onPressed: () => onDecreaseQuantity(index),
-                  ),
-                  Text('${item.quantity}'),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                    onPressed: () => onIncreaseQuantity(index),
-                  ),
-                ],
-              ),
-            ),
-            DataCell(Text('${item.total.toStringAsFixed(2)} ر.س')),
-            DataCell(
-              IconButton(
-                icon: const Icon(
-                  Icons.delete_outline,
-                  size: 18,
-                  color: Colors.red,
-                ),
-                onPressed: () => onRemoveItem(index),
-              ),
-            ),
+    return SingleChildScrollView(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 20,
+          columns: const [
+            DataColumn(label: Text('#')),
+            DataColumn(label: Text('الصنف')),
+            DataColumn(label: Text('السعر')),
+            DataColumn(label: Text('الكمية')),
+            DataColumn(label: Text('الإجمالي')),
+            DataColumn(label: Text('حذف')),
           ],
-        );
-      }).toList(),
+          rows: cartItems.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            return DataRow(
+              cells: [
+                DataCell(Text('${index + 1}')),
+                DataCell(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(item.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(item.sku, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                DataCell(Text('${item.price.toStringAsFixed(2)} ج.م')),
+                DataCell(
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, size: 18),
+                        onPressed: () => onDecreaseQuantity(index),
+                      ),
+                      Text('${item.quantity}'),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline, size: 18),
+                        onPressed: () => onIncreaseQuantity(index),
+                      ),
+                    ],
+                  ),
+                ),
+                DataCell(Text('${item.total.toStringAsFixed(2)} ج.م')),
+                DataCell(
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    onPressed: () => onRemoveItem(index),
+                  ),
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 }
