@@ -22,8 +22,10 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
   final _productRepository = ProductRepository();
   final _accountRepository = AccountRepository();
   final _purchaseService = PurchaseService();
+  final _discountController = TextEditingController(text: '');
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
+
   Supplier? _supplier;
   Account? _account;
   final List<_Line> _items = [];
@@ -31,22 +33,42 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
   bool _saving = false;
 
   double get _subtotal => _items.fold(0, (sum, item) => sum + item.total);
+
+  double get _discount {
+    final text = _discountController.text.trim();
+    if (text.isEmpty) return 0;
+    return double.tryParse(text) ?? 0;
+  }
+
+  double get _total =>
+      (_subtotal - _discount).clamp(0, double.infinity).toDouble();
   double get _paid => double.tryParse(_paidController.text.trim()) ?? 0;
   double get _remaining =>
-      (_subtotal - _paid).clamp(0, double.infinity).toDouble();
+      (_total - _paid).clamp(0, double.infinity).toDouble();
 
   @override
   void initState() {
     super.initState();
     _paidController.addListener(_refresh);
+    _discountController.addListener(_onDiscountChanged);
   }
 
   void _refresh() {
     if (mounted) setState(() {});
   }
 
+  void _onDiscountChanged() {
+    if (!mounted) return;
+    setState(() {
+      if (_paymentType == 'نقدي') {
+        _paidController.text = _total.toStringAsFixed(2);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _discountController.dispose();
     _paidController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -74,9 +96,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
               return ListTile(
                 title: Text(supplier.name),
                 subtitle: Text(supplier.phone ?? 'بدون رقم هاتف'),
-                trailing: Text(
-                  '${supplier.balance.toStringAsFixed(2)} ج.م',
-                ),
+                trailing: Text('${supplier.balance.toStringAsFixed(2)} ج.م'),
                 onTap: () => Navigator.pop(context, supplier),
               );
             },
@@ -85,9 +105,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       ),
     );
 
-    if (selected != null && mounted) {
-      setState(() => _supplier = selected);
-    }
+    if (selected != null && mounted) setState(() => _supplier = selected);
   }
 
   Future<void> _selectAccount() async {
@@ -111,9 +129,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
               final account = accounts[index];
               return ListTile(
                 title: Text(account.name),
-                subtitle: Text(
-                  '${account.balance.toStringAsFixed(2)} ج.م',
-                ),
+                subtitle: Text('${account.balance.toStringAsFixed(2)} ج.م'),
                 onTap: () => Navigator.pop(context, account),
               );
             },
@@ -122,9 +138,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       ),
     );
 
-    if (selected != null && mounted) {
-      setState(() => _account = selected);
-    }
+    if (selected != null && mounted) setState(() => _account = selected);
   }
 
   Future<void> _addItem() async {
@@ -149,9 +163,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
               return ListTile(
                 title: Text(product.name),
                 subtitle: Text('المخزون الحالي: ${product.quantity}'),
-                trailing: Text(
-                  '${product.purchasePrice.toStringAsFixed(2)} ج.م',
-                ),
+                trailing: Text('${product.purchasePrice.toStringAsFixed(2)} ج.م'),
                 onTap: () => Navigator.pop(context, product),
               );
             },
@@ -182,9 +194,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: priceController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'سعر الشراء'),
             ),
           ],
@@ -198,20 +208,12 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             onPressed: () {
               final quantity = int.tryParse(quantityController.text.trim());
               final price = double.tryParse(priceController.text.trim());
-              if (quantity == null ||
-                  quantity <= 0 ||
-                  price == null ||
-                  !price.isFinite ||
-                  price < 0) {
+              if (quantity == null || quantity <= 0 || price == null || !price.isFinite || price < 0) {
                 return;
               }
               Navigator.pop(
                 context,
-                _Line(
-                  product: product,
-                  quantity: quantity,
-                  price: price,
-                ),
+                _Line(product: product, quantity: quantity, price: price),
               );
             },
             child: const Text('إضافة'),
@@ -222,13 +224,10 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
 
     quantityController.dispose();
     priceController.dispose();
-
     if (result == null || !mounted) return;
 
     setState(() {
-      final index = _items.indexWhere(
-        (item) => item.product.id == result.product.id,
-      );
+      final index = _items.indexWhere((item) => item.product.id == result.product.id);
       if (index >= 0) {
         _items[index].quantity += result.quantity;
         _items[index].price = result.price;
@@ -236,7 +235,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
         _items.add(result);
       }
       if (_paymentType == 'نقدي') {
-        _paidController.text = _subtotal.toStringAsFixed(2);
+        _paidController.text = _total.toStringAsFixed(2);
       }
     });
   }
@@ -251,7 +250,11 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       _message('أضف صنف واحد على الأقل');
       return;
     }
-    if (!_paid.isFinite || _paid < 0 || _paid > _subtotal) {
+    if (!_discount.isFinite || _discount < 0 || _discount > _subtotal) {
+      _message('الخصم غير صحيح');
+      return;
+    }
+    if (!_paid.isFinite || _paid < 0 || _paid > _total) {
       _message('المبلغ المدفوع غير صحيح');
       return;
     }
@@ -277,7 +280,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
             discount: 0,
           );
         }).toList(),
-        discount: 0,
+        discount: _discount,
         paidAmount: _paid,
         notes: _notesController.text.trim().isEmpty
             ? null
@@ -367,16 +370,10 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                '${entry.value.total.toStringAsFixed(2)} ج.م',
-                              ),
+                              Text('${entry.value.total.toStringAsFixed(2)} ج.م'),
                               IconButton(
-                                onPressed: () =>
-                                    setState(() => _items.removeAt(entry.key)),
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                ),
+                                onPressed: () => setState(() => _items.removeAt(entry.key)),
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
                               ),
                             ],
                           ),
@@ -397,31 +394,32 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: const [
-                        DropdownMenuItem(
-                          value: 'نقدي',
-                          child: Text('نقدي'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'آجل',
-                          child: Text('آجل'),
-                        ),
+                        DropdownMenuItem(value: 'نقدي', child: Text('نقدي')),
+                        DropdownMenuItem(value: 'آجل', child: Text('آجل')),
                       ],
                       onChanged: (value) {
                         if (value == null) return;
                         setState(() {
                           _paymentType = value;
-                          _paidController.text = value == 'نقدي'
-                              ? _subtotal.toStringAsFixed(2)
-                              : '0';
+                          _paidController.text =
+                              value == 'نقدي' ? _total.toStringAsFixed(2) : '0';
                         });
                       },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
-                      controller: _paidController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                      controller: _discountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'خصم الفاتورة (اختياري)',
+                        border: OutlineInputBorder(),
+                        hintText: 'سيبها فاضية لو مفيش خصم',
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _paidController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'المدفوع',
                         border: OutlineInputBorder(),
@@ -434,8 +432,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
                         child: InputDecorator(
                           decoration: const InputDecoration(
                             labelText: 'الحساب',
-                            prefixIcon:
-                                Icon(Icons.account_balance_wallet_outlined),
+                            prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                             border: OutlineInputBorder(),
                           ),
                           child: Text(_account?.name ?? 'اختر الحساب'),
@@ -455,20 +452,19 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
               const SizedBox(height: 16),
               _card(
                 'ملخص',
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'الإجمالي: ${_subtotal.toStringAsFixed(2)} ج.م',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    Text('الإجمالي قبل الخصم: ${_subtotal.toStringAsFixed(2)} ج.م'),
+                    const SizedBox(height: 6),
+                    Text('الخصم: ${_discount.toStringAsFixed(2)} ج.م'),
+                    const SizedBox(height: 6),
                     Text(
-                      'المتبقي: ${_remaining.toStringAsFixed(2)} ج.م',
+                      'الإجمالي: ${_total.toStringAsFixed(2)} ج.م',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
+                    const SizedBox(height: 6),
+                    Text('المتبقي: ${_remaining.toStringAsFixed(2)} ج.م'),
                   ],
                 ),
               ),
@@ -482,12 +478,8 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.save_outlined),
-                label: Text(
-                  _saving ? 'جاري الحفظ...' : 'حفظ الفاتورة',
-                ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
+                label: Text(_saving ? 'جاري الحفظ...' : 'حفظ الفاتورة'),
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
               ),
             ],
           ),
@@ -507,13 +499,7 @@ class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 14),
           child,
         ],
@@ -527,11 +513,7 @@ class _Line {
   int quantity;
   double price;
 
-  _Line({
-    required this.product,
-    required this.quantity,
-    required this.price,
-  });
+  _Line({required this.product, required this.quantity, required this.price});
 
   double get total => quantity * price;
 }
