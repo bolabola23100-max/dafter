@@ -60,17 +60,24 @@ class PurchaseReturnService {
     String? notes,
     DateTime? date,
   }) async {
-    if (items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
-    if (refundedAmount < 0)
+    if (items.isEmpty) {
+      throw Exception('ضيف صنف واحد على الأقل');
+    }
+    if (refundedAmount < 0) {
       throw Exception('مبلغ الفلوس الراجعة مينفعش يكون سالب');
+    }
     if (refundedAmount > 0 &&
         (refundAccountId == null || refundAccountId.isEmpty)) {
       throw Exception('اختار الحساب اللي هتنزل فيه فلوس المورد');
     }
 
     final purchase = await _purchaseRepository.getPurchaseById(purchaseId);
-    if (purchase == null) throw Exception('فاتورة الشراء مش موجودة');
-    if (purchase.supplierId == null) throw Exception('الفاتورة دي مفيهاش مورد');
+    if (purchase == null) {
+      throw Exception('فاتورة الشراء مش موجودة');
+    }
+    if (purchase.supplierId == null) {
+      throw Exception('الفاتورة دي مفيهاش مورد');
+    }
 
     final returnDate = date ?? DateTime.now();
     final db = await _database.database;
@@ -79,7 +86,9 @@ class PurchaseReturnService {
         txn,
         purchase.supplierId!,
       );
-      if (supplier == null) throw Exception('المورد مش موجود');
+      if (supplier == null) {
+        throw Exception('المورد مش موجود');
+      }
 
       final purchaseSubtotal = purchase.subtotal;
       final invoiceDiscountFactor = purchaseSubtotal > 0
@@ -121,8 +130,9 @@ class PurchaseReturnService {
       // purchase item could be submitted twice and bypass the per-row limit.
       final requestedByPurchaseItem = <String, int>{};
       for (final item in items) {
-        if (item.quantity <= 0)
+        if (item.quantity <= 0) {
           throw Exception('كمية المرتجع لازم تكون أكبر من صفر');
+        }
         requestedByPurchaseItem.update(
           item.purchaseItemId,
           (quantity) => quantity + item.quantity,
@@ -137,10 +147,12 @@ class PurchaseReturnService {
 
       for (final item in items) {
         final original = purchaseItemById[item.purchaseItemId];
-        if (original == null)
+        if (original == null) {
           throw Exception('في صنف من المرتجع مش موجود في الفاتورة');
-        if (item.productId != original.productId)
+        }
+        if (item.productId != original.productId) {
           throw Exception('بيانات الصنف مش متطابقة مع الفاتورة');
+        }
 
         final alreadyReturned =
             returnedByPurchaseItem[item.purchaseItemId] ?? 0;
@@ -154,9 +166,12 @@ class PurchaseReturnService {
           txn,
           item.productId,
         );
-        if (product == null) throw Exception('المنتج مش موجود');
-        if (product.quantity < item.quantity)
+        if (product == null) {
+          throw Exception('المنتج مش موجود');
+        }
+        if (product.quantity < item.quantity) {
           throw Exception('المخزون الحالي مش مكفي للمرتجع: ${product.name}');
+        }
 
         final lineGross = original.quantity * original.price;
         final lineNet = (lineGross - original.discount)
@@ -182,9 +197,12 @@ class PurchaseReturnService {
         0,
         (sum, item) => sum + item.total,
       );
-      if (total <= 0) throw Exception('قيمة المرتجع لازم تكون أكبر من صفر');
-      if (refundedAmount > total)
+      if (total <= 0) {
+        throw Exception('قيمة المرتجع لازم تكون أكبر من صفر');
+      }
+      if (refundedAmount > total) {
         throw Exception('الفلوس الراجعة مينفعش تكون أكتر من قيمة المرتجع');
+      }
       if (refundedAmount > refundableAmount) {
         throw Exception(
           'المبلغ اللي هيرجع من المورد أكبر من المبلغ المدفوع فعليًا في الفاتورة. '
@@ -211,7 +229,9 @@ class PurchaseReturnService {
           txn,
           item.productId,
         );
-        if (product == null) throw Exception('المنتج مش موجود');
+        if (product == null) {
+          throw Exception('المنتج مش موجود');
+        }
         await _productRepository.updateStockWithExecutor(
           txn,
           item.productId,
@@ -257,8 +277,9 @@ class PurchaseReturnService {
           txn,
           refundAccountId!,
         );
-        if (account == null)
+        if (account == null) {
           throw Exception('الحساب اللي هتدخل فيه الفلوس مش موجود');
+        }
 
         await txn.insert(DatabaseTables.payments, {
           'id': IdGenerator.generate(),
