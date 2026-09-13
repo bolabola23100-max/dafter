@@ -2,8 +2,10 @@ import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/model/payment.dart';
+import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/model/sale_return.dart';
+import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/sales/repo/sale_return_repository.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
 import 'package:flutter/material.dart';
@@ -22,12 +24,14 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   final _salesRepository = SalesRepository();
   final _saleReturnRepository = SaleReturnRepository();
   final _paymentRepository = PaymentRepository();
+  final _productRepository = ProductRepository();
 
   List<Customer> _customers = [];
   Customer? _selectedCustomer;
   List<Sale> _sales = [];
   List<SaleReturn> _returns = [];
   List<Payment> _payments = [];
+  Map<String, Product> _products = {};
   bool _isLoading = true;
 
   @override
@@ -38,7 +42,12 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
 
   Future<void> _loadCustomers() async {
     try {
-      final customers = await _customerRepository.getCustomers();
+      final results = await Future.wait([
+        _customerRepository.getCustomers(),
+        _productRepository.getProducts(),
+      ]);
+      final customers = results[0] as List<Customer>;
+      final products = results[1] as List<Product>;
       if (!mounted) return;
 
       Customer? selected;
@@ -54,6 +63,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
       setState(() {
         _customers = customers;
         _selectedCustomer = selected;
+        _products = {for (final product in products) product.id: product};
         _isLoading = false;
       });
 
@@ -63,7 +73,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showMessage('مش قادر أجيب العملاء: $e');
+      _showMessage('مش قادر أجيب بيانات العميل: $e');
     }
   }
 
@@ -107,9 +117,10 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   double get _totalSales => _sales.fold(0, (sum, sale) => sum + sale.total);
 
   double get _totalSalesRemaining =>
-      _sales.fold(0, (sum, sale) => sum + sale.remainingAmount);
+      _sales.fold(0, (sum, sale) => sum + sale.remainingAmount.clamp(0, double.infinity));
 
-  double get _totalReturns => _returns.fold(0, (sum, saleReturn) => sum + saleReturn.total);
+  double get _totalReturns =>
+      _returns.fold(0, (sum, saleReturn) => sum + saleReturn.total);
 
   double get _totalReturnCredits => _returns.fold(
         0,
@@ -132,9 +143,8 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
 
   String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
 
-  String _date(DateTime value) {
-    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
-  }
+  String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -171,10 +181,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
                   const SizedBox(width: 10),
                   const Text(
                     'كشف حساب عميل',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -186,7 +193,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
                       padding: const EdgeInsets.all(24),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1050),
+                          constraints: const BoxConstraints(maxWidth: 1100),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -234,58 +241,25 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   }
 
   Widget _buildSummary(Customer customer, double balance) {
-    return Row(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
       children: [
-        Expanded(
-          child: _SummaryCard(
-            title: 'رصيد قبل كده',
-            value: _money(customer.openingBalance),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _SummaryCard(
-            title: 'إجمالي المبيعات',
-            value: _money(_totalSales),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _SummaryCard(
-            title: 'إجمالي المرتجعات',
-            value: _money(_totalReturns),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _SummaryCard(
-            title: 'إجمالي اللي اتدفع',
-            value: _money(_totalReceipts),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _SummaryCard(
-            title: 'عليه دلوقتي',
-            value: _money(balance),
-          ),
-        ),
+        _SummaryCard(title: 'رصيد قبل كده', value: _money(customer.openingBalance)),
+        _SummaryCard(title: 'إجمالي المبيعات', value: _money(_totalSales)),
+        _SummaryCard(title: 'إجمالي المرتجعات', value: _money(_totalReturns)),
+        _SummaryCard(title: 'إجمالي اللي اتدفع', value: _money(_totalReceipts)),
+        _SummaryCard(title: 'عليه دلوقتي', value: _money(balance)),
       ],
     );
   }
 
   Widget _buildTransactions() {
-    final rows = <_StatementRow>[];
+    final rows = <Widget>[];
 
     for (final sale in _sales) {
       rows.add(
-        _StatementRow(
-          date: sale.date,
-          title: 'فاتورة بيع',
-          subtitle: 'إجمالي ${_money(sale.total)}',
-          amount: sale.remainingAmount,
-          isReceipt: false,
-        ),
+        _buildSaleTile(sale),
       );
     }
 
@@ -294,36 +268,46 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
           .clamp(0.0, double.infinity)
           .toDouble();
       rows.add(
-        _StatementRow(
-          date: saleReturn.date,
-          title: 'مرتجع بيع',
-          subtitle: 'قيمة المرتجع ${_money(saleReturn.total)}',
-          amount: credit,
-          isReceipt: true,
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.assignment_return_outlined),
+          title: Text('مرتجع بيع — ${_money(saleReturn.total)}'),
+          subtitle: Text(
+            '${_date(saleReturn.date)} — ${credit > 0 ? 'خصم من رصيد العميل ${_money(credit)}' : 'تم رد الفلوس بالكامل'}',
+          ),
+          trailing: credit > 0
+              ? Text(
+                  '+${_money(credit)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                )
+              : null,
         ),
       );
     }
 
     for (final payment in _payments) {
       rows.add(
-        _StatementRow(
-          date: payment.date,
-          title: 'تحصيل دفعة',
-          subtitle: payment.notes ?? 'تحصيل من العميل',
-          amount: payment.amount,
-          isReceipt: true,
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.payments_outlined),
+          title: const Text('إيصال تحصيل من العميل'),
+          subtitle: Text(
+            '${_date(payment.date)}${payment.notes == null || payment.notes!.trim().isEmpty ? '' : ' — ${payment.notes}'}',
+          ),
+          trailing: Text(
+            '+${_money(payment.amount)}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       );
     }
-
-    rows.sort((a, b) => b.date.compareTo(a.date));
 
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'الحركات',
+            'الفواتير والحركات',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
@@ -333,23 +317,86 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
               child: Center(child: Text('لسه مفيش حركات على الحساب')),
             )
           else
-            ...rows.map(
-              (row) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  row.isReceipt ? Icons.arrow_downward : Icons.receipt_long,
-                  color: row.isReceipt
-                      ? Colors.green
-                      : const Color(0xFF0E4C4C),
-                ),
-                title: Text(row.title),
-                subtitle: Text('${_date(row.date)} — ${row.subtitle}'),
-                trailing: Text(
-                  '${row.isReceipt ? '+' : '-'}${_money(row.amount)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
+            ...rows,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaleTile(Sale sale) {
+    final saleReturns = _returns.where((item) => item.saleId == sale.id).toList();
+    final returnedByItem = <String, int>{};
+    for (final saleReturn in saleReturns) {
+      for (final item in saleReturn.items) {
+        returnedByItem.update(
+          item.saleItemId,
+          (value) => value + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+    }
+
+    final returnTotal = saleReturns.fold<double>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.total,
+    );
+    final refundedTotal = saleReturns.fold<double>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.refundedAmount,
+    );
+    final remaining = sale.remainingAmount.clamp(0, double.infinity).toDouble();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        leading: const Icon(Icons.receipt_long_outlined),
+        title: Text(
+          sale.displayInvoiceNumber,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          '${_date(sale.date)} • ${_money(sale.total)} • مدفوع ${_money(sale.paidAmount)}${remaining > 0 ? ' • باقي ${_money(remaining)}' : ''}',
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        children: [
+          const Divider(),
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'الأصناف اللي اشتراها',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...sale.items.map((item) {
+            final returned = returnedByItem[item.id] ?? 0;
+            final productName = _products[item.productId]?.name ?? item.productId;
+            return ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(productName),
+              subtitle: Text(
+                'الكمية: ${item.quantity} • السعر: ${_money(item.price)} • إجمالي: ${_money(item.subtotal)}${returned > 0 ? ' • مرتجع: $returned' : ''}',
+              ),
+            );
+          }),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'المدفوع وقت البيع: ${_money(sale.paidAmount)} • الآجل من الفاتورة: ${_money(remaining)}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (returnTotal > 0) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'المرتجع: ${_money(returnTotal)} • المردود نقدًا: ${_money(refundedTotal)}',
               ),
             ),
+          ],
         ],
       ),
     );
@@ -363,28 +410,12 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
           child: Text(
             _customers.isEmpty
                 ? 'لسه مفيش عملاء'
-                : 'اختار العميل عشان تشوف حسابه',
+                : 'اختار العميل عشان تشوف فواتيره والمشتريات والتحصيلات',
           ),
         ),
       ),
     );
   }
-}
-
-class _StatementRow {
-  final DateTime date;
-  final String title;
-  final String subtitle;
-  final double amount;
-  final bool isReceipt;
-
-  const _StatementRow({
-    required this.date,
-    required this.title,
-    required this.subtitle,
-    required this.amount,
-    required this.isReceipt,
-  });
 }
 
 class _Card extends StatelessWidget {
@@ -414,17 +445,20 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-          ),
-        ],
+    return SizedBox(
+      width: 190,
+      child: _Card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
       ),
     );
   }
