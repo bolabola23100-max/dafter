@@ -18,7 +18,15 @@ class PaymentRepository {
     DatabaseExecutor executor,
     Payment payment,
   ) async {
-    if (payment.amount <= 0) throw Exception('قيمة الدفعة لازم تكون أكبر من صفر');
+    if (payment.id.trim().isEmpty) {
+      throw Exception('معرف الدفعة غير صالح');
+    }
+    if (payment.accountId.trim().isEmpty) {
+      throw Exception('الحساب المرتبط بالدفعة غير صالح');
+    }
+    if (!payment.amount.isFinite || payment.amount <= 0) {
+      throw Exception('قيمة الدفعة لازم تكون رقمًا صحيحًا وأكبر من صفر');
+    }
     await executor.insert(DatabaseTables.payments, {
       'id': payment.id,
       'type': payment.type.name,
