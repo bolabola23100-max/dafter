@@ -4,9 +4,10 @@ class ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool primary;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
-  const ActionButton({super.key, 
+  const ActionButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.primary,
