@@ -50,7 +50,6 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
 
     // The native X button is intercepted by setPreventClose(true). Once the
     // user has confirmed, disable interception before forcing the window out.
-    // This also prevents the close request from being trapped again.
     await windowManager.setPreventClose(false);
     await windowManager.destroy();
   }
@@ -65,15 +64,13 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('قبل ما تقفل دفتر'),
-        content: const Text('تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟'),
+        content: const Text(
+          'تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _CloseAction.cancel),
             child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseAction.closeWithoutBackup),
-            child: const Text('إغلاق بدون نسخة'),
           ),
           FilledButton.icon(
             onPressed: () => Navigator.pop(context, _CloseAction.backupAndClose),
@@ -136,4 +133,4 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
   }
 }
 
-enum _CloseAction { cancel, closeWithoutBackup, backupAndClose }
+enum _CloseAction { cancel, backupAndClose }
