@@ -45,11 +45,7 @@ class _SalesScreenState extends State<SalesScreen> {
       final refunds = <String, double>{};
       for (final r in returns) {
         totals.update(r.saleId, (v) => v + r.total, ifAbsent: () => r.total);
-        refunds.update(
-          r.saleId,
-          (v) => v + r.refundedAmount,
-          ifAbsent: () => r.refundedAmount,
-        );
+        refunds.update(r.saleId, (v) => v + r.refundedAmount, ifAbsent: () => r.refundedAmount);
       }
       if (!mounted) return;
       setState(() {
@@ -67,10 +63,7 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _open(Widget screen) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     await _load();
   }
 
@@ -80,133 +73,81 @@ class _SalesScreenState extends State<SalesScreen> {
 
   String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
 
-  String _date(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  String _date(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   double _adjustedRemaining(Sale sale, String saleId) {
     final returned = _returnedTotals[saleId] ?? 0;
     final refunded = _refundedTotals[saleId] ?? 0;
     final amountAppliedToBalance = (returned - refunded).clamp(0, double.infinity);
-    return (sale.remainingAmount - amountAppliedToBalance)
-        .clamp(0, double.infinity)
-        .toDouble();
+    return (sale.remainingAmount - amountAppliedToBalance).clamp(0, double.infinity).toDouble();
   }
 
   Future<void> _showSaleDetails(Sale sale) async {
     final saleReturns = await _returns.getReturnsBySale(sale.id);
     if (!mounted) return;
-
     final returnedByItem = <String, int>{};
     for (final saleReturn in saleReturns) {
       for (final item in saleReturn.items) {
-        returnedByItem.update(
-          item.saleItemId,
-          (value) => value + item.quantity,
-          ifAbsent: () => item.quantity,
-        );
+        returnedByItem.update(item.saleItemId, (value) => value + item.quantity, ifAbsent: () => item.quantity);
       }
     }
-
-    final returnedTotal = saleReturns.fold<double>(
-      0,
-      (sum, saleReturn) => sum + saleReturn.total,
-    );
-    final refundedTotal = saleReturns.fold<double>(
-      0,
-      (sum, saleReturn) => sum + saleReturn.refundedAmount,
-    );
+    final returnedTotal = saleReturns.fold<double>(0, (sum, saleReturn) => sum + saleReturn.total);
+    final refundedTotal = saleReturns.fold<double>(0, (sum, saleReturn) => sum + saleReturn.refundedAmount);
     final net = sale.total - returnedTotal;
-    final remainingBalance = (sale.remainingAmount -
-            (returnedTotal - refundedTotal).clamp(0, double.infinity))
-        .clamp(0, double.infinity)
-        .toDouble();
+    final remainingBalance = (sale.remainingAmount - (returnedTotal - refundedTotal).clamp(0, double.infinity)).clamp(0, double.infinity).toDouble();
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('تفاصيل فاتورة البيع #${sale.id}'),
-          content: SizedBox(
-            width: 800,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('التاريخ: ${_date(sale.date)}'),
-                  const SizedBox(height: 8),
-                  Text('إجمالي الفاتورة الأصلي: ${_money(sale.total)}'),
-                  if (returnedTotal > 0) ...[
-                    const SizedBox(height: 4),
-                    Text('إجمالي المرتجع: ${_money(returnedTotal)}'),
-                    const SizedBox(height: 4),
-                    Text('الفلوس المرتجعة: ${_money(refundedTotal)}'),
-                  ],
+      builder: (dialogContext) => AlertDialog(
+        title: Text(sale.displayInvoiceNumber),
+        content: SizedBox(
+          width: 800,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('التاريخ: ${_date(sale.date)}'),
+                const SizedBox(height: 8),
+                Text('إجمالي الفاتورة الأصلي: ${_money(sale.total)}'),
+                if (returnedTotal > 0) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    'صافي المبيعات: ${_money(net)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  Text('إجمالي المرتجع: ${_money(returnedTotal)}'),
                   const SizedBox(height: 4),
-                  Text('المتبقي على العميل الآن: ${_money(remainingBalance)}'),
-                  const Divider(height: 28),
-                  const Text(
-                    'الأصناف',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const SizedBox(height: 10),
-                  ...sale.items.map((item) {
-                    final returned = returnedByItem[item.id] ?? 0;
-                    final remaining = (item.quantity - returned)
-                        .clamp(0, item.quantity)
-                        .toInt();
-                    final productName = _products[item.productId]?.name ??
-                        item.productId;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE5E9EB)),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Text(productName),
-                          ),
-                          Expanded(child: Text('باع: ${item.quantity}')),
-                          Expanded(child: Text('مرتجع: $returned')),
-                          Expanded(
-                            child: Text(
-                              'متاح: $remaining',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: remaining == 0 ? Colors.grey : null,
-                              ),
-                            ),
-                          ),
-                          Expanded(child: Text(_money(item.subtotal))),
-                        ],
-                      ),
-                    );
-                  }),
-                  if (saleReturns.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text('مفيش مرتجعات على الفاتورة دي.'),
-                    ),
+                  Text('الفلوس المرتجعة: ${_money(refundedTotal)}'),
                 ],
-              ),
+                const SizedBox(height: 4),
+                Text('صافي المبيعات: ${_money(net)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text('المتبقي على العميل الآن: ${_money(remainingBalance)}'),
+                const Divider(height: 28),
+                const Text('الأصناف', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 10),
+                ...sale.items.map((item) {
+                  final returned = returnedByItem[item.id] ?? 0;
+                  final remaining = (item.quantity - returned).clamp(0, item.quantity).toInt();
+                  final productName = _products[item.productId]?.name ?? item.productId;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE5E9EB)), borderRadius: BorderRadius.circular(10)),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 3, child: Text(productName)),
+                        Expanded(child: Text('باع: ${item.quantity}')),
+                        Expanded(child: Text('مرتجع: $returned')),
+                        Expanded(child: Text('متاح: $remaining', style: TextStyle(fontWeight: FontWeight.bold, color: remaining == 0 ? Colors.grey : null))),
+                        Expanded(child: Text(_money(item.subtotal))),
+                      ],
+                    ),
+                  );
+                }),
+                if (saleReturns.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('مفيش مرتجعات على الفاتورة دي.')),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('إغلاق'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إغلاق'))],
+      ),
     );
   }
 
@@ -214,10 +155,7 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget build(BuildContext context) {
     final total = _sales.fold<double>(0, (s, sale) => s + sale.total);
     final returned = _returnedTotals.values.fold<double>(0, (s, v) => s + v);
-    final remaining = _sales.fold<double>(
-      0,
-      (s, sale) => s + _adjustedRemaining(sale, sale.id),
-    );
+    final remaining = _sales.fold<double>(0, (s, sale) => s + _adjustedRemaining(sale, sale.id));
     final netSales = total - returned;
 
     return Padding(
@@ -231,29 +169,15 @@ class _SalesScreenState extends State<SalesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'المبيعات',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
+                    Text('المبيعات', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                     SizedBox(height: 4),
-                    Text(
-                      'كل فواتير البيع والمرتجعات والمدفوعات',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                    Text('كل فواتير البيع والمرتجعات والمدفوعات', style: TextStyle(color: Colors.grey)),
                   ],
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: () => _open(const SalesReturnScreen()),
-                icon: const Icon(Icons.assignment_return_outlined),
-                label: const Text('مرتجع بيع'),
-              ),
+              OutlinedButton.icon(onPressed: () => _open(const SalesReturnScreen()), icon: const Icon(Icons.assignment_return_outlined), label: const Text('مرتجع بيع')),
               const SizedBox(width: 10),
-              FilledButton.icon(
-                onPressed: () => _open(const SalesInvoiceScreen()),
-                icon: const Icon(Icons.add),
-                label: const Text('فاتورة بيع جديدة'),
-              ),
+              FilledButton.icon(onPressed: () => _open(const SalesInvoiceScreen()), icon: const Icon(Icons.add), label: const Text('فاتورة بيع جديدة')),
             ],
           ),
           const SizedBox(height: 20),
@@ -284,42 +208,19 @@ class _SalesScreenState extends State<SalesScreen> {
                             final returnTotal = _returnedTotals[sale.id] ?? 0;
                             final net = sale.total - returnTotal;
                             final adjustedRemaining = _adjustedRemaining(sale, sale.id);
-                            final status = adjustedRemaining <= 0
-                                ? 'مدفوعة'
-                                : sale.paidAmount > 0
-                                    ? 'جزئي'
-                                    : 'آجل';
-
+                            final status = adjustedRemaining <= 0 ? 'مدفوعة' : sale.paidAmount > 0 ? 'جزئي' : 'آجل';
                             return ListTile(
                               onTap: () => _showSaleDetails(sale),
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.receipt_long_outlined),
-                              ),
-                              title: Text(
-                                'فاتورة بيع #${sale.id}',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: Text(
-                                '${_date(sale.date)} • ${sale.items.length} أصناف • $status${returnTotal > 0 ? ' • مرتجع ${_money(returnTotal)}' : ''}',
-                              ),
+                              leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
+                              title: Text(sale.displayInvoiceNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              subtitle: Text('${_date(sale.date)} • ${sale.items.length} أصناف • $status${returnTotal > 0 ? ' • مرتجع ${_money(returnTotal)}' : ''}'),
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(
-                                    'صافي ${_money(net)}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  if (returnTotal > 0)
-                                    Text(
-                                      'الأصلي ${_money(sale.total)}',
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                    ),
-                                  if (adjustedRemaining > 0)
-                                    Text(
-                                      'باقي ${_money(adjustedRemaining)}',
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                    ),
+                                  Text('صافي ${_money(net)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  if (returnTotal > 0) Text('الأصلي ${_money(sale.total)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  if (adjustedRemaining > 0) Text('باقي ${_money(adjustedRemaining)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                 ],
                               ),
                             );
@@ -346,10 +247,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 children: [
                   Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   const SizedBox(height: 5),
-                  Text(
-                    _money(value),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                  ),
+                  Text(_money(value), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                 ],
               ),
             ),
