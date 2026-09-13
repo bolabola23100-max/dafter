@@ -39,7 +39,9 @@ class _ReportFilterScreenState extends State<ReportFilterScreen> {
   void initState() {
     super.initState();
     selectedPeriod = widget.initialPeriod;
-    selectedReport = widget.initialReport == 'الأرباح' ? 'صافي الحركة' : widget.initialReport;
+    selectedReport = widget.initialReport == 'الأرباح'
+        ? 'صافي الحركة'
+        : widget.initialReport;
   }
 
   void _applyFilter() {
@@ -58,15 +60,23 @@ class _ReportFilterScreenState extends State<ReportFilterScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: items.contains(value) ? value : items.first,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
           ),
-          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+          items: items
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
           onChanged: onChanged,
         ),
       ],
@@ -116,7 +126,10 @@ class _ReportFilterScreenState extends State<ReportFilterScreen> {
                   icon: const Icon(Icons.check),
                   label: const Padding(
                     padding: EdgeInsets.all(14),
-                    child: Text('تطبيق التصفية', style: TextStyle(fontSize: 16)),
+                    child: Text(
+                      'تطبيق التصفية',
+                      style: TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
               ],

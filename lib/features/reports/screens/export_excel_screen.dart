@@ -17,8 +17,21 @@ class _ExportExcelScreenState extends State<ExportExcelScreen> {
   String selectedPeriod = 'هذا الشهر';
   bool _loading = false;
 
-  final List<String> reports = const ['كل التقارير', 'المبيعات', 'المشتريات', 'المصروفات', 'الأرباح', 'المخزون'];
-  final List<String> periods = const ['اليوم', 'هذا الأسبوع', 'هذا الشهر', 'آخر 3 شهور', 'هذا العام'];
+  final List<String> reports = const [
+    'كل التقارير',
+    'المبيعات',
+    'المشتريات',
+    'المصروفات',
+    'الأرباح',
+    'المخزون',
+  ];
+  final List<String> periods = const [
+    'اليوم',
+    'هذا الأسبوع',
+    'هذا الشهر',
+    'آخر 3 شهور',
+    'هذا العام',
+  ];
 
   (DateTime, DateTime) _periodRange(String period) {
     final now = DateTime.now();
@@ -30,11 +43,17 @@ class _ExportExcelScreenState extends State<ExportExcelScreen> {
         final start = today.subtract(Duration(days: today.weekday - 1));
         return (start, start.add(const Duration(days: 7)));
       case 'آخر 3 شهور':
-        return (DateTime(now.year, now.month - 2, 1), today.add(const Duration(days: 1)));
+        return (
+          DateTime(now.year, now.month - 2, 1),
+          today.add(const Duration(days: 1)),
+        );
       case 'هذا العام':
         return (DateTime(now.year, 1, 1), DateTime(now.year + 1, 1, 1));
       default:
-        return (DateTime(now.year, now.month, 1), DateTime(now.year, now.month + 1, 1));
+        return (
+          DateTime(now.year, now.month, 1),
+          DateTime(now.year, now.month + 1, 1),
+        );
     }
   }
 
@@ -42,33 +61,57 @@ class _ExportExcelScreenState extends State<ExportExcelScreen> {
     setState(() => _loading = true);
     try {
       final range = _periodRange(selectedPeriod);
-      final summary = await _reportService.getSummary(from: range.$1, to: range.$2);
-      final saved = await _exportService.exportExcel(summary: summary, period: selectedPeriod, report: selectedReport);
+      final summary = await _reportService.getSummary(
+        from: range.$1,
+        to: range.$2,
+      );
+      final saved = await _exportService.exportExcel(
+        summary: summary,
+        period: selectedPeriod,
+        report: selectedReport,
+      );
       if (!mounted) return;
       if (saved) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حفظ ملف Excel بنجاح')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم حفظ ملف Excel بنجاح')));
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حصلت مشكلة وإحنا بنصدر التقرير')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('حصلت مشكلة وإحنا بنصدر التقرير')),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Widget _dropdown({required String title, required String value, required List<String> items, required ValueChanged<String?> onChanged}) {
+  Widget _dropdown({
+    required String title,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: value,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
           ),
-          items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+          items: items
+              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+              .toList(),
           onChanged: _loading ? null : onChanged,
         ),
       ],
@@ -89,16 +132,42 @@ class _ExportExcelScreenState extends State<ExportExcelScreen> {
               children: [
                 const Icon(Icons.table_chart_outlined, size: 60),
                 const SizedBox(height: 16),
-                const Text('تصدير التقرير بصيغة Excel', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                const Text(
+                  'تصدير التقرير بصيغة Excel',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 30),
-                _dropdown(title: 'نوع التقرير', value: selectedReport, items: reports, onChanged: (value) => setState(() => selectedReport = value!)),
+                _dropdown(
+                  title: 'نوع التقرير',
+                  value: selectedReport,
+                  items: reports,
+                  onChanged: (value) => setState(() => selectedReport = value!),
+                ),
                 const SizedBox(height: 20),
-                _dropdown(title: 'الفترة', value: selectedPeriod, items: periods, onChanged: (value) => setState(() => selectedPeriod = value!)),
+                _dropdown(
+                  title: 'الفترة',
+                  value: selectedPeriod,
+                  items: periods,
+                  onChanged: (value) => setState(() => selectedPeriod = value!),
+                ),
                 const SizedBox(height: 30),
                 ElevatedButton.icon(
                   onPressed: _loading ? null : _exportExcel,
-                  icon: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.download),
-                  label: Padding(padding: const EdgeInsets.all(14), child: Text(_loading ? 'جاري التصدير...' : 'حفظ Excel', style: const TextStyle(fontSize: 16))),
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.download),
+                  label: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      _loading ? 'جاري التصدير...' : 'حفظ Excel',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
                 ),
               ],
             ),

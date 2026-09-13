@@ -157,10 +157,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   icon: Icons.shopping_cart_outlined,
                   label: 'فاتورة بيع',
                   primary: true,
-                  onTap: () => Nav.push(
-                    context,
-                    const SalesInvoiceScreen(),
-                  ),
+                  onTap: () => Nav.push(context, const SalesInvoiceScreen()),
                 ),
               ),
             ],
