@@ -20,14 +20,34 @@ Future<void> main() async {
   runApp(const DafterApp());
 }
 
-class DafterApp extends StatefulWidget {
+class DafterApp extends StatelessWidget {
   const DafterApp({super.key});
 
   @override
-  State<DafterApp> createState() => _DafterAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'دفتر',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      locale: const Locale('ar'),
+      home: const _WindowCloseHandler(child: SidebarScreen()),
+    );
+  }
 }
 
-class _DafterAppState extends State<DafterApp> with WindowListener {
+/// Lives below MaterialApp so that its [BuildContext] has MaterialLocalizations
+/// when the native Windows close event asks us to show an AlertDialog.
+class _WindowCloseHandler extends StatefulWidget {
+  const _WindowCloseHandler({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_WindowCloseHandler> createState() => _WindowCloseHandlerState();
+}
+
+class _WindowCloseHandlerState extends State<_WindowCloseHandler>
+    with WindowListener {
   bool _showingCloseDialog = false;
   bool _closingWindow = false;
 
@@ -36,9 +56,9 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
     super.initState();
     windowManager.addListener(this);
 
-    // The native window must be fully attached before we ask window_manager
-    // to intercept the Windows title-bar X. Doing this after the first frame
-    // also avoids racing the plugin initialization during app startup.
+    // Wait until this widget is mounted below MaterialApp before intercepting
+    // the native Windows X. This gives showDialog a fully initialized
+    // Material/Localizations context when onWindowClose fires.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _configureWindowClose();
     });
@@ -60,8 +80,7 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
     if (_closingWindow) return;
     _closingWindow = true;
 
-    // Disable interception before closing. Otherwise close() would trigger
-    // the same callback again instead of letting Windows terminate the app.
+    // Disable interception before closing so the native close can complete.
     await windowManager.setPreventClose(false);
     await windowManager.destroy();
   }
@@ -142,15 +161,7 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'دفتر',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      locale: const Locale('ar'),
-      home: const SidebarScreen(),
-    );
-  }
+  Widget build(BuildContext context) => widget.child;
 }
 
 enum _CloseAction { cancel, backupAndClose }
