@@ -4,6 +4,7 @@ enum PaymentStatus { paid, partial, unpaid }
 
 class Sale {
   final String id;
+  final int? invoiceNumber;
   final String? customerId;
 
   final DateTime date;
@@ -19,6 +20,7 @@ class Sale {
 
   Sale({
     required this.id,
+    this.invoiceNumber,
     this.customerId,
     required this.date,
     required this.items,
@@ -39,4 +41,7 @@ class Sale {
   double get remainingAmount {
     return total - paidAmount;
   }
+
+  String get displayInvoiceNumber =>
+      invoiceNumber == null ? 'فاتورة بيع' : 'فاتورة بيع $invoiceNumber';
 }
