@@ -35,9 +35,19 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
   void initState() {
     super.initState();
     windowManager.addListener(this);
-    // Register the listener first, then intercept the native Windows X.
-    // Doing this here guarantees the close event is delivered to this state.
-    windowManager.setPreventClose(true);
+
+    // The native window must be fully attached before we ask window_manager
+    // to intercept the Windows title-bar X. Doing this after the first frame
+    // also avoids racing the plugin initialization during app startup.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _configureWindowClose();
+    });
+  }
+
+  Future<void> _configureWindowClose() async {
+    if (!mounted) return;
+    await windowManager.setClosable(true);
+    await windowManager.setPreventClose(true);
   }
 
   @override
@@ -50,43 +60,48 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
     if (_closingWindow) return;
     _closingWindow = true;
 
-    // Let the native close operation proceed normally after the user has
-    // made a decision. Using close() keeps the behavior of the standard X.
+    // Disable interception before closing. Otherwise close() would trigger
+    // the same callback again instead of letting Windows terminate the app.
     await windowManager.setPreventClose(false);
-    await windowManager.close();
+    await windowManager.destroy();
   }
 
   @override
-  void onWindowClose() async {
+  void onWindowClose() {
     if (_closingWindow || _showingCloseDialog) return;
     _showingCloseDialog = true;
+    _handleWindowClose();
+  }
 
-    final result = await showDialog<_CloseAction>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('قبل ما تقفل دفتر'),
-        content: const Text(
-          'تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟',
+  Future<void> _handleWindowClose() async {
+    try {
+      if (!mounted) return;
+
+      final result = await showDialog<_CloseAction>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('قبل ما تقفل دفتر'),
+          content: const Text(
+            'تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, _CloseAction.cancel),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              onPressed: () =>
+                  Navigator.pop(context, _CloseAction.backupAndClose),
+              icon: const Icon(Icons.backup_outlined),
+              label: const Text('نسخ احتياطي وإغلاق'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, _CloseAction.cancel),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, _CloseAction.backupAndClose),
-            icon: const Icon(Icons.backup_outlined),
-            label: const Text('نسخ احتياطي وإغلاق'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    _showingCloseDialog = false;
-    if (!mounted || result == null || result == _CloseAction.cancel) return;
+      if (!mounted || result == null || result == _CloseAction.cancel) return;
 
-    if (result == _CloseAction.backupAndClose) {
       var directory = await BackupService.instance.getBackupDirectory();
       if (directory == null) {
         final selected = await BackupService.instance.chooseBackupDirectory();
@@ -102,6 +117,7 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
         if (mounted) {
           await showDialog<void>(
             context: context,
+            barrierDismissible: false,
             builder: (context) => AlertDialog(
               title: const Text('النسخ الاحتياطي فشل'),
               content: const Text(
@@ -118,9 +134,11 @@ class _DafterAppState extends State<DafterApp> with WindowListener {
         }
         return;
       }
-    }
 
-    await _closeWindow();
+      await _closeWindow();
+    } finally {
+      _showingCloseDialog = false;
+    }
   }
 
   @override
