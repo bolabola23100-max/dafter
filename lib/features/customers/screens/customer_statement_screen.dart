@@ -12,9 +12,7 @@ import 'package:flutter/material.dart';
 
 class CustomerStatementScreen extends StatefulWidget {
   final String? customerId;
-
   const CustomerStatementScreen({super.key, this.customerId});
-
   @override
   State<CustomerStatementScreen> createState() => _CustomerStatementScreenState();
 }
@@ -49,7 +47,6 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
       final customers = results[0] as List<Customer>;
       final products = results[1] as List<Product>;
       if (!mounted) return;
-
       Customer? selected;
       if (widget.customerId != null) {
         for (final customer in customers) {
@@ -59,17 +56,13 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
           }
         }
       }
-
       setState(() {
         _customers = customers;
         _selectedCustomer = selected;
         _products = {for (final product in products) product.id: product};
         _isLoading = false;
       });
-
-      if (selected != null) {
-        await _loadStatement(selected.id);
-      }
+      if (selected != null) await _loadStatement(selected.id);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -84,7 +77,6 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
         _saleReturnRepository.getReturns(),
         _paymentRepository.getPaymentsByPerson(customerId),
       ]);
-
       if (!mounted) return;
       setState(() {
         _sales = results[0] as List<Sale>;
@@ -108,33 +100,26 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
       _returns = [];
       _payments = [];
     });
-
-    if (customer != null) {
-      _loadStatement(customer.id);
-    }
+    if (customer != null) _loadStatement(customer.id);
   }
 
   double get _totalSales => _sales.fold(0, (sum, sale) => sum + sale.total);
-
-  double get _totalSalesRemaining =>
-      _sales.fold(0, (sum, sale) => sum + sale.remainingAmount.clamp(0, double.infinity));
-
-  double get _totalReturns =>
-      _returns.fold(0, (sum, saleReturn) => sum + saleReturn.total);
-
+  double get _totalSalesRemaining => _sales.fold(
+        0,
+        (sum, sale) =>
+            sum + sale.remainingAmount.clamp(0, double.infinity).toDouble(),
+      );
+  double get _totalReturns => _returns.fold(0, (sum, saleReturn) => sum + saleReturn.total);
   double get _totalReturnCredits => _returns.fold(
         0,
         (sum, saleReturn) =>
-            sum + (saleReturn.total - saleReturn.refundedAmount).clamp(0.0, double.infinity),
+            sum + (saleReturn.total - saleReturn.refundedAmount).clamp(0.0, double.infinity).toDouble(),
       );
-
-  double get _totalReceipts =>
-      _payments.fold(0, (sum, payment) => sum + payment.amount);
+  double get _totalReceipts => _payments.fold(0, (sum, payment) => sum + payment.amount);
 
   double get _calculatedBalance {
     final customer = _selectedCustomer;
     if (customer == null) return 0;
-
     return customer.openingBalance +
         _totalSalesRemaining -
         _totalReturnCredits -
@@ -142,21 +127,17 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   }
 
   String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
-
   String _date(DateTime value) =>
       '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     final customer = _selectedCustomer;
     final balance = customer == null ? 0.0 : _calculatedBalance;
-
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Scaffold(
@@ -168,9 +149,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFE5E9EB)),
-                ),
+                border: Border(bottom: BorderSide(color: Color(0xFFE5E9EB))),
               ),
               child: Row(
                 children: [
@@ -179,10 +158,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
                     icon: const Icon(Icons.arrow_back, size: 21),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
-                    'كشف حساب عميل',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
+                  const Text('كشف حساب عميل', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -222,18 +198,10 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
     return _Card(
       child: DropdownButtonFormField<Customer>(
         initialValue: _selectedCustomer,
-        decoration: const InputDecoration(
-          labelText: 'العميل',
-          border: OutlineInputBorder(),
-        ),
+        decoration: const InputDecoration(labelText: 'العميل', border: OutlineInputBorder()),
         hint: const Text('اختار العميل'),
         items: _customers
-            .map(
-              (customer) => DropdownMenuItem<Customer>(
-                value: customer,
-                child: Text(customer.name),
-              ),
-            )
+            .map((customer) => DropdownMenuItem<Customer>(value: customer, child: Text(customer.name)))
             .toList(),
         onChanged: _onCustomerChanged,
       ),
@@ -256,66 +224,38 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
 
   Widget _buildTransactions() {
     final rows = <Widget>[];
-
-    for (final sale in _sales) {
-      rows.add(
-        _buildSaleTile(sale),
-      );
-    }
-
+    for (final sale in _sales) rows.add(_buildSaleTile(sale));
     for (final saleReturn in _returns) {
-      final credit = (saleReturn.total - saleReturn.refundedAmount)
-          .clamp(0.0, double.infinity)
-          .toDouble();
+      final credit = (saleReturn.total - saleReturn.refundedAmount).clamp(0.0, double.infinity).toDouble();
       rows.add(
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.assignment_return_outlined),
           title: Text('مرتجع بيع — ${_money(saleReturn.total)}'),
-          subtitle: Text(
-            '${_date(saleReturn.date)} — ${credit > 0 ? 'خصم من رصيد العميل ${_money(credit)}' : 'تم رد الفلوس بالكامل'}',
-          ),
-          trailing: credit > 0
-              ? Text(
-                  '+${_money(credit)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                )
-              : null,
+          subtitle: Text('${_date(saleReturn.date)} — ${credit > 0 ? 'خصم من رصيد العميل ${_money(credit)}' : 'تم رد الفلوس بالكامل'}'),
+          trailing: credit > 0 ? Text('+${_money(credit)}', style: const TextStyle(fontWeight: FontWeight.bold)) : null,
         ),
       );
     }
-
     for (final payment in _payments) {
       rows.add(
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.payments_outlined),
           title: const Text('إيصال تحصيل من العميل'),
-          subtitle: Text(
-            '${_date(payment.date)}${payment.notes == null || payment.notes!.trim().isEmpty ? '' : ' — ${payment.notes}'}',
-          ),
-          trailing: Text(
-            '+${_money(payment.amount)}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          subtitle: Text('${_date(payment.date)}${payment.notes == null || payment.notes!.trim().isEmpty ? '' : ' — ${payment.notes}'}'),
+          trailing: Text('+${_money(payment.amount)}', style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       );
     }
-
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'الفواتير والحركات',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          const Text('الفواتير والحركات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           if (rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('لسه مفيش حركات على الحساب')),
-            )
+            const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('لسه مفيش حركات على الحساب')))
           else
             ...rows,
         ],
@@ -328,44 +268,24 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
     final returnedByItem = <String, int>{};
     for (final saleReturn in saleReturns) {
       for (final item in saleReturn.items) {
-        returnedByItem.update(
-          item.saleItemId,
-          (value) => value + item.quantity,
-          ifAbsent: () => item.quantity,
-        );
+        returnedByItem.update(item.saleItemId, (value) => value + item.quantity, ifAbsent: () => item.quantity);
       }
     }
-
-    final returnTotal = saleReturns.fold<double>(
-      0,
-      (sum, saleReturn) => sum + saleReturn.total,
-    );
-    final refundedTotal = saleReturns.fold<double>(
-      0,
-      (sum, saleReturn) => sum + saleReturn.refundedAmount,
-    );
+    final returnTotal = saleReturns.fold<double>(0, (sum, saleReturn) => sum + saleReturn.total);
+    final refundedTotal = saleReturns.fold<double>(0, (sum, saleReturn) => sum + saleReturn.refundedAmount);
     final remaining = sale.remainingAmount.clamp(0, double.infinity).toDouble();
-
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
         leading: const Icon(Icons.receipt_long_outlined),
-        title: Text(
-          sale.displayInvoiceNumber,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-          '${_date(sale.date)} • ${_money(sale.total)} • مدفوع ${_money(sale.paidAmount)}${remaining > 0 ? ' • باقي ${_money(remaining)}' : ''}',
-        ),
+        title: Text(sale.displayInvoiceNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('${_date(sale.date)} • ${_money(sale.total)} • مدفوع ${_money(sale.paidAmount)}${remaining > 0 ? ' • باقي ${_money(remaining)}' : ''}'),
         childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         children: [
           const Divider(),
           const Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              'الأصناف اللي اشتراها',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
+            child: Text('الأصناف اللي اشتراها', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ),
           const SizedBox(height: 8),
           ...sale.items.map((item) {
@@ -375,26 +295,19 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               title: Text(productName),
-              subtitle: Text(
-                'الكمية: ${item.quantity} • السعر: ${_money(item.price)} • إجمالي: ${_money(item.subtotal)}${returned > 0 ? ' • مرتجع: $returned' : ''}',
-              ),
+              subtitle: Text('الكمية: ${item.quantity} • السعر: ${_money(item.price)} • إجمالي: ${_money(item.subtotal)}${returned > 0 ? ' • مرتجع: $returned' : ''}'),
             );
           }),
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              'المدفوع وقت البيع: ${_money(sale.paidAmount)} • الآجل من الفاتورة: ${_money(remaining)}',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            child: Text('المدفوع وقت البيع: ${_money(sale.paidAmount)} • الآجل من الفاتورة: ${_money(remaining)}', style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
           if (returnTotal > 0) ...[
             const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerRight,
-              child: Text(
-                'المرتجع: ${_money(returnTotal)} • المردود نقدًا: ${_money(refundedTotal)}',
-              ),
+              child: Text('المرتجع: ${_money(returnTotal)} • المردود نقدًا: ${_money(refundedTotal)}'),
             ),
           ],
         ],
@@ -407,11 +320,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
       child: Padding(
         padding: const EdgeInsets.all(40),
         child: Center(
-          child: Text(
-            _customers.isEmpty
-                ? 'لسه مفيش عملاء'
-                : 'اختار العميل عشان تشوف فواتيره والمشتريات والتحصيلات',
-          ),
+          child: Text(_customers.isEmpty ? 'لسه مفيش عملاء' : 'اختار العميل عشان تشوف فواتيره والمشتريات والتحصيلات'),
         ),
       ),
     );
@@ -420,9 +329,7 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
 
 class _Card extends StatelessWidget {
   final Widget child;
-
   const _Card({required this.child});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -440,9 +347,7 @@ class _Card extends StatelessWidget {
 class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
-
   const _SummaryCard({required this.title, required this.value});
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -453,10 +358,7 @@ class _SummaryCard extends StatelessWidget {
           children: [
             Text(title, style: const TextStyle(color: Colors.black54)),
             const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
+            Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
