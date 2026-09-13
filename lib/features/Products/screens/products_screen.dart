@@ -1,7 +1,6 @@
 import 'package:dafter/core/widgets/action_button.dart';
 import 'package:dafter/core/widgets/nav.dart';
 import 'package:dafter/features/Inventory/screens/inventory_count_screen.dart';
-
 import 'package:dafter/features/Products/screens/add_product_screen.dart';
 import 'package:dafter/features/Products/screens/categories_screen.dart';
 import 'package:dafter/features/Products/services/category_service.dart';
@@ -39,17 +38,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _loadData();
   }
 
-  // =========================================================
-  // Load Data
-  // =========================================================
-
   Future<void> _loadData() async {
     try {
-      if (mounted) {
-        setState(() {
-          _isLoading = true;
-        });
-      }
+      if (mounted) setState(() => _isLoading = true);
 
       final results = await Future.wait([
         _productService.getProducts(),
@@ -61,12 +52,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
       final products = results[0] as List<Product>;
       final categories = results[1] as List<Category>;
 
-      // لو التصنيف اللي كان متحدد اتحذف،
-      // نلغي الفلتر بدل ما يفضل متعلق بـ ID مش موجود.
       if (selectedCategoryFilter != null &&
-          !categories.any(
-            (category) => category.id == selectedCategoryFilter,
-          )) {
+          !categories.any((category) => category.id == selectedCategoryFilter)) {
         selectedCategoryFilter = null;
       }
 
@@ -78,10 +65,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
-
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -93,88 +77,45 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
-  // =========================================================
-  // Stock Status
-  // =========================================================
-
   StockStatus _getStockStatus(Product product) {
-    if (product.quantity <= 0) {
-      return StockStatus.outOfStock;
-    }
-
-    if (product.quantity <= product.minQuantity) {
-      return StockStatus.low;
-    }
-
+    if (product.quantity <= 0) return StockStatus.outOfStock;
+    if (product.quantity <= product.minQuantity) return StockStatus.low;
     return StockStatus.available;
   }
 
-  // =========================================================
-  // Summary
-  // =========================================================
+  int get _totalProducts => _products.length;
 
-  int get _totalProducts {
-    return _products.length;
-  }
+  int get _lowStockCount => _products
+      .where((product) => _getStockStatus(product) == StockStatus.low)
+      .length;
 
-  int get _lowStockCount {
-    return _products.where((product) {
-      return _getStockStatus(product) == StockStatus.low;
-    }).length;
-  }
-
-  int get _outOfStockCount {
-    return _products.where((product) {
-      return _getStockStatus(product) == StockStatus.outOfStock;
-    }).length;
-  }
-
-  // =========================================================
-  // Filtered Products
-  // =========================================================
+  int get _outOfStockCount => _products
+      .where((product) => _getStockStatus(product) == StockStatus.outOfStock)
+      .length;
 
   List<Product> get _filteredProducts {
     return _products.where((product) {
-      // -----------------------------------------
-      // Category Filter
-      // -----------------------------------------
-
       final matchesCategory =
           selectedCategoryFilter == null ||
           product.categoryId == selectedCategoryFilter;
-
-      // -----------------------------------------
-      // Stock Status Filter
-      // -----------------------------------------
-
       final matchesStatus =
           selectedStatusFilter == null ||
           _getStockStatus(product).name == selectedStatusFilter;
-
       return matchesCategory && matchesStatus;
     }).toList();
   }
 
-  // =========================================================
-  // Delete Product
-  // =========================================================
-
   Future<void> _deleteProduct(Product product) async {
     try {
       await _productService.deleteProduct(product.id);
-
       if (!mounted) return;
-
       await _loadData();
-
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تم حذف ${product.name}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تم حذف ${product.name}')),
+      );
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -186,54 +127,26 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
-  // =========================================================
-  // Add Product
-  // =========================================================
-
   Future<void> _addProduct() async {
     final result = await Nav.push(context, const AddProductScreen());
-
     if (!mounted) return;
-
-    if (result == true) {
-      await _loadData();
-    }
+    if (result == true) await _loadData();
   }
-
-  // =========================================================
-  // Edit Product
-  // =========================================================
 
   Future<void> _editProduct(Product product) async {
     final result = await Nav.push(
       context,
       AddProductScreen(productToEdit: product),
     );
-
     if (!mounted) return;
-
-    if (result == true) {
-      await _loadData();
-    }
+    if (result == true) await _loadData();
   }
-
-  // =========================================================
-  // Open Categories
-  // =========================================================
 
   Future<void> _openCategories() async {
     await Nav.push(context, const CategoriesScreen());
-
     if (!mounted) return;
-
-    // بعد ما نرجع من التصنيفات،
-    // نعيد تحميل المنتجات والتصنيفات.
     await _loadData();
   }
-
-  // =========================================================
-  // Reset Filters
-  // =========================================================
 
   void _resetFilters() {
     setState(() {
@@ -242,10 +155,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
     });
   }
 
-  // =========================================================
-  // Build
-  // =========================================================
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -253,9 +162,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // =========================================================
-          // Action Buttons
-          // =========================================================
           Row(
             children: [
               Expanded(
@@ -265,16 +171,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   primary: false,
                   onTap: () async {
                     await Nav.push(context, const InventoryCountScreen());
-
                     if (!mounted) return;
-
                     await _loadData();
                   },
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.category_outlined,
@@ -283,24 +185,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   onTap: _openCategories,
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
-                  icon: Icons.download_outlined,
-                  label: 'تصدير',
+                  icon: Icons.refresh_outlined,
+                  label: 'تحديث البيانات',
                   primary: false,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('تصدير المنتجات — قريبًا')),
-                    );
-                  },
+                  onTap: _isLoading ? null : _loadData,
                 ),
               ),
-
               const SizedBox(width: 12),
-
               Expanded(
                 child: ActionButton(
                   icon: Icons.add_box_outlined,
@@ -311,45 +205,24 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // =========================================================
-          // Summary Cards
-          // =========================================================
           ProductsSummaryRow(
             totalProducts: _totalProducts,
             lowStockCount: _lowStockCount,
             outOfStockCount: _outOfStockCount,
           ),
-
           const SizedBox(height: 20),
-
-          // =========================================================
-          // Filters Bar
-          // =========================================================
           ProductsFilterBar(
             categories: _categories,
             selectedCategory: selectedCategoryFilter,
             selectedStatus: selectedStatusFilter,
-            onCategoryChanged: (value) {
-              setState(() {
-                selectedCategoryFilter = value;
-              });
-            },
-            onStatusChanged: (value) {
-              setState(() {
-                selectedStatusFilter = value;
-              });
-            },
+            onCategoryChanged: (value) =>
+                setState(() => selectedCategoryFilter = value),
+            onStatusChanged: (value) =>
+                setState(() => selectedStatusFilter = value),
             onReset: _resetFilters,
           ),
-
           const SizedBox(height: 16),
-
-          // =========================================================
-          // Products Table
-          // =========================================================
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
