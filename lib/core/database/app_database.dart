@@ -8,7 +8,6 @@ class AppDatabase {
 
   static final AppDatabase instance = AppDatabase._();
 
-  /// Creates an isolated in-memory database for integration tests.
   AppDatabase.forTesting() : this._(true);
 
   final bool _inMemory;
@@ -30,7 +29,7 @@ class AppDatabase {
 
     return openDatabase(
       databasePath,
-      version: 6,
+      version: 7,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -69,7 +68,31 @@ class AppDatabase {
         WHERE cost_price = 0
       ''');
     }
+    if (oldVersion < 7) {
+      await db.execute('ALTER TABLE ${DatabaseTables.sales} ADD COLUMN invoice_number INTEGER');
+      await db.execute('ALTER TABLE ${DatabaseTables.purchases} ADD COLUMN invoice_number INTEGER');
+      await _backfillInvoiceNumbers(db, DatabaseTables.sales);
+      await _backfillInvoiceNumbers(db, DatabaseTables.purchases);
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_invoice_date ON ${DatabaseTables.sales}(date, invoice_number)');
+      await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_purchases_invoice_date ON ${DatabaseTables.purchases}(date, invoice_number)');
+    }
   }
+
+  Future<void> _backfillInvoiceNumbers(Database db, String table) async {
+    final rows = await db.query(table, columns: ['rowid', 'date'], orderBy: 'date ASC, rowid ASC');
+    final counters = <String, int>{};
+    for (final row in rows) {
+      final rowId = row['rowid'];
+      final date = DateTime.parse(row['date'] as String);
+      final key = _dateKey(date);
+      final number = (counters[key] ?? 0) + 1;
+      counters[key] = number;
+      await db.update(table, {'invoice_number': number}, where: 'rowid = ?', whereArgs: [rowId]);
+    }
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('CREATE TABLE ${DatabaseTables.categories} (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
@@ -77,9 +100,9 @@ class AppDatabase {
     await db.execute('CREATE TABLE ${DatabaseTables.suppliers} (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, address TEXT, opening_balance REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.customers} (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, address TEXT, opening_balance REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.accounts} (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, opening_balance REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)');
-    await db.execute('CREATE TABLE ${DatabaseTables.sales} (id TEXT PRIMARY KEY, customer_id TEXT, date TEXT NOT NULL, subtotal REAL NOT NULL DEFAULT 0, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (customer_id) REFERENCES ${DatabaseTables.customers}(id) ON DELETE SET NULL)');
+    await db.execute('CREATE TABLE ${DatabaseTables.sales} (id TEXT PRIMARY KEY, customer_id TEXT, date TEXT NOT NULL, invoice_number INTEGER, subtotal REAL NOT NULL DEFAULT 0, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (customer_id) REFERENCES ${DatabaseTables.customers}(id) ON DELETE SET NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.saleItems} (id TEXT PRIMARY KEY, sale_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL DEFAULT 0, cost_price REAL NOT NULL DEFAULT 0, FOREIGN KEY (sale_id) REFERENCES ${DatabaseTables.sales}(id) ON DELETE CASCADE, FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
-    await db.execute('CREATE TABLE ${DatabaseTables.purchases} (id TEXT PRIMARY KEY, supplier_id TEXT, date TEXT NOT NULL, subtotal REAL NOT NULL DEFAULT 0, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (supplier_id) REFERENCES ${DatabaseTables.suppliers}(id) ON DELETE SET NULL)');
+    await db.execute('CREATE TABLE ${DatabaseTables.purchases} (id TEXT PRIMARY KEY, supplier_id TEXT, date TEXT NOT NULL, invoice_number INTEGER, subtotal REAL NOT NULL DEFAULT 0, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0, paid_amount REAL NOT NULL DEFAULT 0, notes TEXT, FOREIGN KEY (supplier_id) REFERENCES ${DatabaseTables.suppliers}(id) ON DELETE SET NULL)');
     await db.execute('CREATE TABLE ${DatabaseTables.purchaseItems} (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL DEFAULT 0, FOREIGN KEY (purchase_id) REFERENCES ${DatabaseTables.purchases}(id) ON DELETE CASCADE, FOREIGN KEY (product_id) REFERENCES ${DatabaseTables.products}(id))');
     await db.execute('CREATE TABLE ${DatabaseTables.payments} (id TEXT PRIMARY KEY, type TEXT NOT NULL, person_type TEXT, person_id TEXT, account_id TEXT NOT NULL, amount REAL NOT NULL, date TEXT NOT NULL, notes TEXT, FOREIGN KEY (account_id) REFERENCES ${DatabaseTables.accounts}(id))');
     await db.execute('CREATE TABLE ${DatabaseTables.expenses} (id TEXT PRIMARY KEY, account_id TEXT NOT NULL, category TEXT NOT NULL, amount REAL NOT NULL, date TEXT NOT NULL, notes TEXT, FOREIGN KEY (account_id) REFERENCES ${DatabaseTables.accounts}(id))');
@@ -90,6 +113,8 @@ class AppDatabase {
     await _createSaleReturnTables(db);
     await _createIndexes(db);
     await _createSaleReturnIndexes(db);
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_invoice_date ON ${DatabaseTables.sales}(date, invoice_number)');
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_purchases_invoice_date ON ${DatabaseTables.purchases}(date, invoice_number)');
   }
 
   Future<void> _createPurchaseReturnTables(Database db) async {
