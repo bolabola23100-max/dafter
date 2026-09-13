@@ -2,6 +2,7 @@ import 'package:dafter/core/backup/backup_service.dart';
 import 'package:dafter/core/widgets/action_button.dart';
 import 'package:dafter/features/reports/service/report_export_service.dart';
 import 'package:dafter/features/reports/service/report_service.dart';
+import 'package:dafter/features/settings/screens/user_guide_screen.dart';
 import 'package:dafter/features/settings/widgets/settings_summary_row.dart';
 import 'package:flutter/material.dart';
 
@@ -123,6 +124,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
   );
 
+  void _openUserGuide() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const UserGuideScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -134,6 +141,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Text('التصدير والنسخ الاحتياطي', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             const Text('من هنا بس هتعمل تصدير التقارير وتحفظ أو تسترجع بيانات المحل.', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: _openUserGuide,
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text('دليل استخدام البرنامج بالكامل'),
+              ),
+            ),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(18),
