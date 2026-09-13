@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:dafter/core/database/app_database_watcher.dart';
-import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/model/product.dart';
 import 'package:flutter/material.dart';
@@ -124,25 +123,7 @@ class _TopBarState extends State<TopBar> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 20),
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: CustomTextFormField(
-                textAlign: TextAlign.right,
-                decoration: InputDecoration(
-                  hintText: 'بحث سريع عن منتج، عميل، أو فاتورة...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  isDense: true,
-                  filled: true,
-                  fillColor: const Color(0xFFF6F8F9),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
-          ),
+
           const Spacer(),
           Stack(
             clipBehavior: Clip.none,

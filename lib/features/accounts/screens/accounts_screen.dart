@@ -73,7 +73,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 child: ActionButton(
                   icon: Icons.account_balance_wallet_outlined,
                   label: 'أرصدة المحل',
-                  primary: true,
+                  primary: false,
                   onTap: () => _open(const AccountBalancesScreen()),
                 ),
               ),
@@ -109,7 +109,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 child: ActionButton(
                   icon: Icons.payments_outlined,
                   label: 'دفع / قبض',
-                  primary: false,
+                  primary: true,
                   onTap: () => _open(const PaymentReceiptScreen()),
                 ),
               ),
