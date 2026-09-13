@@ -1,3 +1,5 @@
+import 'package:dafter/features/Products/repo/product_repository.dart';
+import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/sales/repo/sale_return_repository.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
@@ -15,8 +17,11 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   final _repository = SalesRepository();
   final _returns = SaleReturnRepository();
+  final _productRepository = ProductRepository();
   List<Sale> _sales = [];
   Map<String, double> _returnedTotals = {};
+  Map<String, double> _refundedTotals = {};
+  Map<String, Product> _products = {};
   bool _loading = true;
 
   @override
@@ -28,20 +33,30 @@ class _SalesScreenState extends State<SalesScreen> {
   Future<void> _load() async {
     if (mounted) setState(() => _loading = true);
     try {
-      final sales = await _repository.getSales();
-      final returns = await _returns.getReturns();
+      final results = await Future.wait([
+        _repository.getSales(),
+        _returns.getReturns(),
+        _productRepository.getProducts(),
+      ]);
+      final sales = results[0] as List<Sale>;
+      final returns = results[1] as List<dynamic>;
+      final products = results[2] as List<Product>;
       final totals = <String, double>{};
+      final refunds = <String, double>{};
       for (final r in returns) {
-        totals.update(
+        totals.update(r.saleId, (v) => v + r.total, ifAbsent: () => r.total);
+        refunds.update(
           r.saleId,
-          (v) => v + r.total,
-          ifAbsent: () => r.total,
+          (v) => v + r.refundedAmount,
+          ifAbsent: () => r.refundedAmount,
         );
       }
       if (!mounted) return;
       setState(() {
         _sales = sales;
         _returnedTotals = totals;
+        _refundedTotals = refunds;
+        _products = {for (final product in products) product.id: product};
         _loading = false;
       });
     } catch (_) {
@@ -68,6 +83,15 @@ class _SalesScreenState extends State<SalesScreen> {
   String _date(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
+  double _adjustedRemaining(Sale sale, String saleId) {
+    final returned = _returnedTotals[saleId] ?? 0;
+    final refunded = _refundedTotals[saleId] ?? 0;
+    final amountAppliedToBalance = (returned - refunded).clamp(0, double.infinity);
+    return (sale.remainingAmount - amountAppliedToBalance)
+        .clamp(0, double.infinity)
+        .toDouble();
+  }
+
   Future<void> _showSaleDetails(Sale sale) async {
     final saleReturns = await _returns.getReturnsBySale(sale.id);
     if (!mounted) return;
@@ -87,7 +111,15 @@ class _SalesScreenState extends State<SalesScreen> {
       0,
       (sum, saleReturn) => sum + saleReturn.total,
     );
+    final refundedTotal = saleReturns.fold<double>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.refundedAmount,
+    );
     final net = sale.total - returnedTotal;
+    final remainingBalance = (sale.remainingAmount -
+            (returnedTotal - refundedTotal).clamp(0, double.infinity))
+        .clamp(0, double.infinity)
+        .toDouble();
 
     await showDialog<void>(
       context: context,
@@ -95,7 +127,7 @@ class _SalesScreenState extends State<SalesScreen> {
         return AlertDialog(
           title: Text('تفاصيل فاتورة البيع #${sale.id}'),
           content: SizedBox(
-            width: 760,
+            width: 800,
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,11 +139,15 @@ class _SalesScreenState extends State<SalesScreen> {
                     const SizedBox(height: 4),
                     Text('إجمالي المرتجع: ${_money(returnedTotal)}'),
                     const SizedBox(height: 4),
-                    Text(
-                      'صافي المبيعات: ${_money(net)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                    Text('الفلوس المرتجعة: ${_money(refundedTotal)}'),
                   ],
+                  const SizedBox(height: 4),
+                  Text(
+                    'صافي المبيعات: ${_money(net)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('المتبقي على العميل الآن: ${_money(remainingBalance)}'),
                   const Divider(height: 28),
                   const Text(
                     'الأصناف',
@@ -120,7 +156,11 @@ class _SalesScreenState extends State<SalesScreen> {
                   const SizedBox(height: 10),
                   ...sale.items.map((item) {
                     final returned = returnedByItem[item.id] ?? 0;
-                    final remaining = (item.quantity - returned).clamp(0, item.quantity);
+                    final remaining = (item.quantity - returned)
+                        .clamp(0, item.quantity)
+                        .toInt();
+                    final productName = _products[item.productId]?.name ??
+                        item.productId;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
@@ -132,22 +172,20 @@ class _SalesScreenState extends State<SalesScreen> {
                         children: [
                           Expanded(
                             flex: 3,
-                            child: Text('منتج: ${item.productId}'),
+                            child: Text(productName),
                           ),
                           Expanded(child: Text('باع: ${item.quantity}')),
                           Expanded(child: Text('مرتجع: $returned')),
                           Expanded(
                             child: Text(
-                              'متبقي: $remaining',
+                              'متاح: $remaining',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: remaining == 0 ? Colors.grey : null,
                               ),
                             ),
                           ),
-                          Expanded(
-                            child: Text(_money(item.subtotal)),
-                          ),
+                          Expanded(child: Text(_money(item.subtotal))),
                         ],
                       ),
                     );
@@ -177,8 +215,10 @@ class _SalesScreenState extends State<SalesScreen> {
     final total = _sales.fold<double>(0, (s, sale) => s + sale.total);
     final returned = _returnedTotals.values.fold<double>(0, (s, v) => s + v);
     final paid = _sales.fold<double>(0, (s, sale) => s + sale.paidAmount);
-    final remaining =
-        _sales.fold<double>(0, (s, sale) => s + sale.remainingAmount);
+    final remaining = _sales.fold<double>(
+      0,
+      (s, sale) => s + _adjustedRemaining(sale, sale.id),
+    );
     final netSales = total - returned;
 
     return Padding(
@@ -220,37 +260,13 @@ class _SalesScreenState extends State<SalesScreen> {
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(
-                child: _summary(
-                  'إجمالي البيع',
-                  total,
-                  Icons.shopping_cart_outlined,
-                ),
-              ),
+              Expanded(child: _summary('إجمالي البيع', total, Icons.shopping_cart_outlined)),
               const SizedBox(width: 12),
-              Expanded(
-                child: _summary(
-                  'المرتجعات',
-                  returned,
-                  Icons.assignment_return_outlined,
-                ),
-              ),
+              Expanded(child: _summary('المرتجعات', returned, Icons.assignment_return_outlined)),
               const SizedBox(width: 12),
-              Expanded(
-                child: _summary(
-                  'صافي المبيعات',
-                  netSales,
-                  Icons.trending_up,
-                ),
-              ),
+              Expanded(child: _summary('صافي المبيعات', netSales, Icons.trending_up)),
               const SizedBox(width: 12),
-              Expanded(
-                child: _summary(
-                  'الباقي',
-                  remaining,
-                  Icons.pending_actions_outlined,
-                ),
-              ),
+              Expanded(child: _summary('الباقي', remaining, Icons.pending_actions_outlined)),
             ],
           ),
           const SizedBox(height: 20),
@@ -268,7 +284,8 @@ class _SalesScreenState extends State<SalesScreen> {
                             final sale = _sales[index];
                             final returnTotal = _returnedTotals[sale.id] ?? 0;
                             final net = sale.total - returnTotal;
-                            final status = sale.remainingAmount <= 0
+                            final adjustedRemaining = _adjustedRemaining(sale, sale.id);
+                            final status = adjustedRemaining <= 0
                                 ? 'مدفوعة'
                                 : sale.paidAmount > 0
                                     ? 'جزئي'
@@ -299,9 +316,9 @@ class _SalesScreenState extends State<SalesScreen> {
                                       'الأصلي ${_money(sale.total)}',
                                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                                     ),
-                                  if (sale.remainingAmount > 0)
+                                  if (adjustedRemaining > 0)
                                     Text(
-                                      'باقي ${_money(sale.remainingAmount)}',
+                                      'باقي ${_money(adjustedRemaining)}',
                                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                                     ),
                                 ],
@@ -328,10 +345,7 @@ class _SalesScreenState extends State<SalesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
+                  Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   const SizedBox(height: 5),
                   Text(
                     _money(value),
