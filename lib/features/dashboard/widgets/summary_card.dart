@@ -9,7 +9,7 @@ class SummaryCard extends StatelessWidget {
   final String? trailingText;
 
   const SummaryCard({
-    super.key,
+    super.key,ssss
     required this.icon,
     required this.iconBg,
     required this.iconColor,
@@ -56,8 +56,11 @@ class SummaryCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.arrow_upward,
-                          size: 12, color: Colors.green),
+                      const Icon(
+                        Icons.arrow_upward,
+                        size: 12,
+                        color: Colors.green,
+                      ),
                       const SizedBox(width: 2),
                       Text(
                         trailingText!,

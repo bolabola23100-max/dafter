@@ -13,7 +13,7 @@ class StockMovementService {
   StockMovementService({
     StockMovementRepository? repository,
     ProductRepository? productRepository,
-    AppDatabase? database,
+    AppDatabase? database,ss
   }) : _repository = repository ?? StockMovementRepository(),
        _productRepository = productRepository ?? ProductRepository(),
        _database = database ?? AppDatabase.instance;
