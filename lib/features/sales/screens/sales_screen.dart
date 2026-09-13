@@ -214,7 +214,6 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget build(BuildContext context) {
     final total = _sales.fold<double>(0, (s, sale) => s + sale.total);
     final returned = _returnedTotals.values.fold<double>(0, (s, v) => s + v);
-    final paid = _sales.fold<double>(0, (s, sale) => s + sale.paidAmount);
     final remaining = _sales.fold<double>(
       0,
       (s, sale) => s + _adjustedRemaining(sale, sale.id),
