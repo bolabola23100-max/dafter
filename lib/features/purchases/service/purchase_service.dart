@@ -47,26 +47,34 @@ class PurchaseService {
     required Purchase purchase,
     String? accountId,
   }) async {
-    if (purchase.items.isEmpty) throw Exception('ضيف صنف واحد على الأقل');
+    if (purchase.items.isEmpty) {
+      throw Exception('ضيف صنف واحد على الأقل');
+    }
     if (!purchase.discount.isFinite ||
         purchase.discount < 0 ||
-        purchase.discount > purchase.subtotal)
+        purchase.discount > purchase.subtotal) {
       throw Exception('الخصم غير صحيح');
+    }
     if (!purchase.subtotal.isFinite ||
         purchase.subtotal < 0 ||
         !purchase.total.isFinite ||
-        purchase.total < 0)
+        purchase.total < 0) {
       throw Exception('إجمالي الفاتورة غير صحيح');
+    }
     if (!purchase.paidAmount.isFinite ||
         purchase.paidAmount < 0 ||
-        purchase.paidAmount > purchase.total)
+        purchase.paidAmount > purchase.total) {
       throw Exception('المبلغ المدفوع غير صحيح');
+    }
     final remaining = purchase.remainingAmount < 0
         ? 0
         : purchase.remainingAmount;
-    if (!remaining.isFinite) throw Exception('المبلغ المتبقي غير صحيح');
-    if (remaining > 0 && purchase.supplierId == null)
+    if (!remaining.isFinite) {
+      throw Exception('المبلغ المتبقي غير صحيح');
+    }
+    if (remaining > 0 && purchase.supplierId == null) {
       throw Exception('أي مبلغ متبقي من الفاتورة لازم يتسجل على مورد');
+    }
 
     final db = await _database.database;
     await db.transaction((txn) async {
@@ -75,13 +83,16 @@ class PurchaseService {
           txn,
           purchase.supplierId!,
         );
-        if (supplier == null) throw Exception('المورد غير موجود');
+        if (supplier == null) {
+          throw Exception('المورد غير موجود');
+        }
       }
 
       final productsById = <String, Product>{};
       for (final item in purchase.items) {
-        if (item.quantity <= 0)
+        if (item.quantity <= 0) {
           throw Exception('كمية المنتج لازم تكون أكبر من صفر');
+        }
         if (!item.price.isFinite ||
             !item.discount.isFinite ||
             item.price < 0 ||
@@ -94,22 +105,27 @@ class PurchaseService {
             txn,
             item.productId,
           );
-          if (product == null)
+          if (product == null) {
             throw Exception('المنتج غير موجود: ${item.productId}');
+          }
           productsById[product.id] = product;
         }
       }
 
       if (purchase.paidAmount > 0) {
-        if (accountId == null || accountId.isEmpty)
+        if (accountId == null || accountId.isEmpty) {
           throw Exception('اختار الحساب اللي دفعت منه الفلوس');
+        }
         final account = await _accountRepository.getAccountByIdWithExecutor(
           txn,
           accountId,
         );
-        if (account == null) throw Exception('الحساب غير موجود');
-        if (account.balance < purchase.paidAmount)
+        if (account == null) {
+          throw Exception('الحساب غير موجود');
+        }
+        if (account.balance < purchase.paidAmount) {
           throw Exception('رصيد الحساب مش كافي');
+        }
       }
 
       purchase = Purchase(
@@ -127,8 +143,9 @@ class PurchaseService {
       await _purchaseRepository.addPurchaseWithExecutor(txn, purchase);
       for (final item in purchase.items) {
         final product = productsById[item.productId];
-        if (product == null)
+        if (product == null) {
           throw Exception('المنتج غير موجود: ${item.productId}');
+        }
         await _productRepository.updateStockWithExecutor(
           txn,
           product.id,
@@ -153,7 +170,9 @@ class PurchaseService {
           txn,
           purchase.supplierId!,
         );
-        if (supplier == null) throw Exception('المورد غير موجود');
+        if (supplier == null) {
+          throw Exception('المورد غير موجود');
+        }
         await _supplierRepository.updateBalanceWithExecutor(
           txn,
           supplier.id,
@@ -165,7 +184,9 @@ class PurchaseService {
           txn,
           accountId!,
         );
-        if (account == null) throw Exception('الحساب غير موجود');
+        if (account == null) {
+          throw Exception('الحساب غير موجود');
+        }
         await _paymentRepository.addPaymentWithExecutor(
           txn,
           Payment(
