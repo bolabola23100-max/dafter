@@ -164,7 +164,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 const SizedBox(height: 8),
                 Text('إجمالي الفاتورة الأصلي: ${_money(sale.total)}'),
                 Text('المدفوع وقت البيع: ${_money(sale.paidAmount)}'),
-                Text('الآجل الناتج من الفاتورة: ${_money(sale.remainingAmount.clamp(0, double.infinity))}'),
+                Text('الآجل الناتج من الفاتورة: ${_money(sale.remainingAmount.clamp(0, double.infinity).toDouble())}'),
                 if (returnedTotal > 0) ...[
                   const SizedBox(height: 4),
                   Text('إجمالي المرتجع: ${_money(returnedTotal)}'),
@@ -255,8 +255,11 @@ class _SalesScreenState extends State<SalesScreen> {
           .clamp(0, double.infinity)
           .toDouble();
 
-  double get _creditSales =>
-      _sales.fold<double>(0, (sum, sale) => sum + sale.remainingAmount.clamp(0, double.infinity));
+  double get _creditSales => _sales.fold<double>(
+        0,
+        (sum, sale) =>
+            sum + sale.remainingAmount.clamp(0, double.infinity).toDouble(),
+      );
 
   @override
   Widget build(BuildContext context) {
