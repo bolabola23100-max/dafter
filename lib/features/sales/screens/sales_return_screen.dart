@@ -32,6 +32,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   List<Account> _accounts = [];
   Map<String, Product> _products = {};
   Map<String, int> _returnedQuantities = {};
+  double _previouslyRefunded = 0;
   Sale? _selectedSale;
   Account? _selectedAccount;
   final Map<String, TextEditingController> _quantityControllers = {};
@@ -83,9 +84,11 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     _quantityControllers.clear();
 
     var returned = <String, int>{};
+    var previouslyRefunded = 0.0;
     if (sale != null) {
       final previousReturns = await _returnRepository.getReturnsBySale(sale.id);
       for (final previousReturn in previousReturns) {
+        previouslyRefunded += previousReturn.refundedAmount;
         for (final item in previousReturn.items) {
           returned.update(
             item.saleItemId,
@@ -103,6 +106,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     setState(() {
       _selectedSale = sale;
       _returnedQuantities = returned;
+      _previouslyRefunded = previouslyRefunded;
       _selectedAccount = null;
       _refundController.text = '0';
     });
@@ -128,6 +132,14 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       total += quantity * _effectiveUnitPrice(item);
     }
     return total;
+  }
+
+  double _remainingToRefund() {
+    final sale = _selectedSale;
+    if (sale == null) return 0;
+    return (sale.paidAmount - _previouslyRefunded)
+        .clamp(0, double.infinity)
+        .toDouble();
   }
 
   Future<void> _save() async {
@@ -175,8 +187,16 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
 
     final total = returnItems.fold<double>(0, (sum, item) => sum + item.total);
     final refund = double.tryParse(_refundController.text.trim()) ?? -1;
+    final remainingToRefund = _remainingToRefund();
     if (!refund.isFinite || refund < 0 || refund > total) {
       _message('المبلغ اللي هيرجع للعميل لازم يكون بين صفر وقيمة المرتجع');
+      return;
+    }
+    if (refund > remainingToRefund) {
+      _message(
+        'المبلغ اللي هيترد أكبر من المتبقي للرد. المتاح: '
+        '${remainingToRefund.toStringAsFixed(2)} جنيه',
+      );
       return;
     }
 
@@ -404,6 +424,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   Widget _summaryCard() {
     final total = _returnTotal();
     final refund = double.tryParse(_refundController.text.trim()) ?? 0;
+    final remainingToRefund = _remainingToRefund();
     final credit = (total - refund).clamp(0, double.infinity).toDouble();
     return Container(
       padding: const EdgeInsets.all(18),
@@ -415,7 +436,8 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       child: Row(
         children: [
           Expanded(child: _summary('قيمة المرتجع', total)),
-          Expanded(child: _summary('فلوس راجعة', refund)),
+          Expanded(child: _summary('المدفوع سابقًا', _previouslyRefunded)),
+          Expanded(child: _summary('المتبقي للرد', remainingToRefund)),
           Expanded(child: _summary('هيتخصم من حساب العميل', credit)),
         ],
       ),
