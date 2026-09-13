@@ -13,7 +13,7 @@ class StockMovementService {
   StockMovementService({
     StockMovementRepository? repository,
     ProductRepository? productRepository,
-    AppDatabase? database,ss
+    AppDatabase? database,
   }) : _repository = repository ?? StockMovementRepository(),
        _productRepository = productRepository ?? ProductRepository(),
        _database = database ?? AppDatabase.instance;
@@ -34,7 +34,10 @@ class StockMovementService {
 
     final db = await _database.database;
     await db.transaction((txn) async {
-      final product = await _productRepository.getProductByIdWithExecutor(txn, productId);
+      final product = await _productRepository.getProductByIdWithExecutor(
+        txn,
+        productId,
+      );
       if (product == null) throw Exception('المنتج غير موجود');
 
       final newQuantity = product.quantity + quantity;
@@ -51,7 +54,11 @@ class StockMovementService {
       );
 
       await _repository.addMovementWithExecutor(txn, movement);
-      await _productRepository.updateStockWithExecutor(txn, productId, newQuantity);
+      await _productRepository.updateStockWithExecutor(
+        txn,
+        productId,
+        newQuantity,
+      );
     });
   }
 
@@ -66,7 +73,10 @@ class StockMovementService {
 
     final db = await _database.database;
     await db.transaction((txn) async {
-      final currentProduct = await _productRepository.getProductByIdWithExecutor(txn, product.id);
+      final currentProduct = await _productRepository.getProductByIdWithExecutor(
+        txn,
+        product.id,
+      );
       if (currentProduct == null) throw Exception('المنتج غير موجود');
 
       final difference = actualQuantity - currentProduct.quantity;
@@ -82,7 +92,11 @@ class StockMovementService {
       );
 
       await _repository.addMovementWithExecutor(txn, movement);
-      await _productRepository.updateStockWithExecutor(txn, currentProduct.id, actualQuantity);
+      await _productRepository.updateStockWithExecutor(
+        txn,
+        currentProduct.id,
+        actualQuantity,
+      );
     });
   }
 
@@ -98,11 +112,17 @@ class StockMovementService {
         final productId = entry.key;
         final actualQuantity = entry.value;
 
+        if (productId.trim().isEmpty) {
+          throw Exception('معرف المنتج غير صالح');
+        }
         if (actualQuantity < 0) {
           throw Exception('الكمية الفعلية لا يمكن أن تكون سالبة');
         }
 
-        final product = await _productRepository.getProductByIdWithExecutor(txn, productId);
+        final product = await _productRepository.getProductByIdWithExecutor(
+          txn,
+          productId,
+        );
         if (product == null) throw Exception('أحد المنتجات غير موجود');
 
         final difference = actualQuantity - product.quantity;
@@ -118,7 +138,11 @@ class StockMovementService {
         );
 
         await _repository.addMovementWithExecutor(txn, movement);
-        await _productRepository.updateStockWithExecutor(txn, product.id, actualQuantity);
+        await _productRepository.updateStockWithExecutor(
+          txn,
+          product.id,
+          actualQuantity,
+        );
       }
     });
   }
@@ -126,7 +150,9 @@ class StockMovementService {
   Future<List<StockMovement>> getProductMovements(String productId) =>
       _repository.getProductMovements(productId);
 
-  Future<List<StockMovement>> getAllMovements() => _repository.getAllMovements();
+  Future<List<StockMovement>> getAllMovements() =>
+      _repository.getAllMovements();
 
-  Future<StockMovement?> getMovementById(String id) => _repository.getMovementById(id);
+  Future<StockMovement?> getMovementById(String id) =>
+      _repository.getMovementById(id);
 }
