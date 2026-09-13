@@ -191,7 +191,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   icon: Icons.refresh_outlined,
                   label: 'تحديث البيانات',
                   primary: false,
-                  onTap: _isLoading ? null : _loadData,
+                  onTap: _isLoading ? null : () => _loadData(),
                 ),
               ),
               const SizedBox(width: 12),
