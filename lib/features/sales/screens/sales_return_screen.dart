@@ -1,3 +1,4 @@
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/model/account.dart';
@@ -5,6 +6,7 @@ import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/model/sale_item.dart';
 import 'package:dafter/features/model/sale_return.dart';
+import 'package:dafter/features/sales/repo/sale_return_repository.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
 import 'package:dafter/features/sales/service/sale_return_service.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +20,7 @@ class SalesReturnScreen extends StatefulWidget {
 
 class _SalesReturnScreenState extends State<SalesReturnScreen> {
   final SalesRepository _salesRepository = SalesRepository();
+  final SaleReturnRepository _returnRepository = SaleReturnRepository();
   final ProductRepository _productRepository = ProductRepository();
   final AccountRepository _accountRepository = AccountRepository();
   final SaleReturnService _service = SaleReturnService();
@@ -28,6 +31,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   List<Sale> _sales = [];
   List<Account> _accounts = [];
   Map<String, Product> _products = {};
+  Map<String, int> _returnedQuantities = {};
   Sale? _selectedSale;
   Account? _selectedAccount;
   final Map<String, TextEditingController> _quantityControllers = {};
@@ -72,21 +76,41 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     }
   }
 
-  void _selectSale(Sale? sale) {
+  Future<void> _selectSale(Sale? sale) async {
     for (final controller in _quantityControllers.values) {
       controller.dispose();
     }
     _quantityControllers.clear();
+
+    var returned = <String, int>{};
     if (sale != null) {
+      final previousReturns = await _returnRepository.getReturnsBySale(sale.id);
+      for (final previousReturn in previousReturns) {
+        for (final item in previousReturn.items) {
+          returned.update(
+            item.saleItemId,
+            (value) => value + item.quantity,
+            ifAbsent: () => item.quantity,
+          );
+        }
+      }
       for (final item in sale.items) {
         _quantityControllers[item.id] = TextEditingController(text: '0');
       }
     }
+
+    if (!mounted) return;
     setState(() {
       _selectedSale = sale;
+      _returnedQuantities = returned;
       _selectedAccount = null;
       _refundController.text = '0';
     });
+  }
+
+  int _availableQuantity(SaleItem item) {
+    final returned = _returnedQuantities[item.id] ?? 0;
+    return (item.quantity - returned).clamp(0, item.quantity);
   }
 
   double _effectiveUnitPrice(SaleItem item) {
@@ -114,7 +138,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       return;
     }
 
-    final returnId = _id();
+    final returnId = IdGenerator.generate();
     final returnItems = <SaleReturnItem>[];
     for (final item in sale.items) {
       final quantity =
@@ -123,10 +147,17 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         _message('الكمية لازم تكون صفر أو أكتر');
         return;
       }
+      final available = _availableQuantity(item);
+      if (quantity > available) {
+        _message(
+          'المرتجع من المنتج ده أكبر من المتاح. المتاح للمرتجع: $available',
+        );
+        return;
+      }
       if (quantity > 0) {
         returnItems.add(
           SaleReturnItem(
-            id: _id(),
+            id: IdGenerator.generate(),
             returnId: returnId,
             saleItemId: item.id,
             productId: item.productId,
@@ -144,7 +175,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
 
     final total = returnItems.fold<double>(0, (sum, item) => sum + item.total);
     final refund = double.tryParse(_refundController.text.trim()) ?? -1;
-    if (refund < 0 || refund > total) {
+    if (!refund.isFinite || refund < 0 || refund > total) {
       _message('المبلغ اللي هيرجع للعميل لازم يكون بين صفر وقيمة المرتجع');
       return;
     }
@@ -180,8 +211,6 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
-  String _id() => DateTime.now().microsecondsSinceEpoch.toString();
 
   void _message(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -241,10 +270,9 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                               Expanded(
                                 child: TextField(
                                   controller: _refundController,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
+                                  keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                                   onChanged: (_) => setState(() {}),
                                   decoration: _decoration(
                                     'المبلغ اللي هيرجع للعميل',
@@ -269,15 +297,14 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                                         ),
                                       )
                                       .toList(),
-                                  onChanged:
-                                      (double.tryParse(
+                                  onChanged: (double.tryParse(
                                                 _refundController.text.trim(),
                                               ) ??
                                               0) >
                                           0
                                       ? (value) => setState(
-                                          () => _selectedAccount = value,
-                                        )
+                                            () => _selectedAccount = value,
+                                          )
                                       : null,
                                 ),
                               ),
@@ -332,6 +359,8 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         children: sale.items.map((item) {
           final product = _products[item.productId];
           final controller = _quantityControllers[item.id]!;
+          final returned = _returnedQuantities[item.id] ?? 0;
+          final available = _availableQuantity(item);
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
@@ -343,6 +372,15 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                 Expanded(child: Text('اتباع: ${item.quantity}')),
                 Expanded(
                   child: Text(
+                    'مرتجع: $returned',
+                    style: TextStyle(
+                      color: returned > 0 ? Colors.orange.shade800 : null,
+                    ),
+                  ),
+                ),
+                Expanded(child: Text('متاح: $available')),
+                Expanded(
+                  child: Text(
                     '${_effectiveUnitPrice(item).toStringAsFixed(2)} جنيه',
                   ),
                 ),
@@ -352,7 +390,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                     controller: controller,
                     keyboardType: TextInputType.number,
                     onChanged: (_) => setState(() {}),
-                    decoration: _decoration('المرتجع'),
+                    decoration: _decoration('مرتجع الآن'),
                   ),
                 ),
               ],
@@ -400,7 +438,9 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         title: 'مفيش فاتورة مختارة',
         child: const Padding(
           padding: EdgeInsets.all(25),
-          child: Text('اختار فاتورة بيع عشان تحدد الأصناف والكميات اللي هترجع.'),
+          child: Text(
+            'اختار فاتورة بيع عشان تحدد الأصناف والكميات اللي هترجع.',
+          ),
         ),
       );
 
