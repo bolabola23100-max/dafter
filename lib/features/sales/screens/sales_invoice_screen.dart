@@ -38,8 +38,13 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
   bool _saving = false;
 
   double get _subtotal => _items.fold(0, (sum, item) => sum + item.subtotal);
-  double get _discount =>
-      double.tryParse(_discountController.text.trim()) ?? 0;
+
+  double get _discount {
+    final text = _discountController.text.trim();
+    if (text.isEmpty) return 0;
+    return double.tryParse(text) ?? 0;
+  }
+
   double get _total =>
       (_subtotal - _discount).clamp(0, double.infinity).toDouble();
   double get _paid => double.tryParse(_paidController.text.trim()) ?? 0;
@@ -83,10 +88,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
       return;
     }
 
-    final index = _items.indexWhere(
-      (item) => item.product.id == product.id,
-    );
-
+    final index = _items.indexWhere((item) => item.product.id == product.id);
     if (index >= 0) {
       final existing = _items[index];
       if (existing.quantity >= product.quantity) {
@@ -117,32 +119,26 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
     if (value == null) return;
     setState(() {
       _paymentType = value;
-      if (value == 'آجل') {
-        _paidController.text = '0';
-      } else {
-        _paidController.text = _total.toStringAsFixed(2);
-      }
+      _paidController.text =
+          value == 'آجل' ? '0' : _total.toStringAsFixed(2);
     });
   }
 
   Future<void> _saveInvoice() async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
-
     if (_items.isEmpty) {
       _showError('ضيف صنف واحد على الأقل للفاتورة');
       return;
     }
-
     if (!_paid.isFinite || _paid < 0 || _paid > _total) {
       _showError('المدفوع مينفعش يكون أكبر من إجمالي الفاتورة');
       return;
     }
-
     if (_paid > 0 && _selectedAccount == null) {
       _showError('اختار الحساب اللي دخلت فيه الفلوس');
       return;
     }
-
     if (_remaining > 0 && _selectedCustomer == null) {
       _showError('الفاتورة اللي عليها باقي لازم تتسجل على عميل');
       return;
@@ -178,9 +174,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الفاتورة اتحفظت واتخصمت من المخزن'),
-        ),
+        const SnackBar(content: Text('الفاتورة اتحفظت واتخصمت من المخزن')),
       );
       Navigator.pop(context, true);
     } catch (e) {
@@ -254,9 +248,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE5E9EB)),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE5E9EB))),
       ),
       child: Row(
         children: [
@@ -300,9 +292,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
             ),
           ),
         ],
-        onChanged: (value) {
-          setState(() => _selectedCustomer = value);
-        },
+        onChanged: (value) => setState(() => _selectedCustomer = value),
       ),
     );
   }
@@ -363,9 +353,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          Expanded(
-            child: Text('${line.price.toStringAsFixed(2)} ج.م'),
-          ),
+          Expanded(child: Text('${line.price.toStringAsFixed(2)} ج.م')),
           SizedBox(
             width: 210,
             child: Row(
@@ -377,10 +365,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
                 Expanded(
-                  child: Text(
-                    '${line.quantity}',
-                    textAlign: TextAlign.center,
-                  ),
+                  child: Text('${line.quantity}', textAlign: TextAlign.center),
                 ),
                 IconButton(
                   onPressed: line.quantity >= line.product.quantity
@@ -419,14 +404,8 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
                   initialValue: _paymentType,
                   decoration: _decoration('طريقة الدفع'),
                   items: const [
-                    DropdownMenuItem(
-                      value: 'نقدي',
-                      child: Text('نقدي'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'آجل',
-                      child: Text('آجل'),
-                    ),
+                    DropdownMenuItem(value: 'نقدي', child: Text('نقدي')),
+                    DropdownMenuItem(value: 'آجل', child: Text('آجل')),
                   ],
                   onChanged: _setPaymentType,
                 ),
@@ -440,7 +419,8 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
                   ),
                   decoration: _decoration('المدفوع'),
                   validator: (value) {
-                    final amount = double.tryParse(value?.trim() ?? '');
+                    final text = value?.trim() ?? '';
+                    final amount = double.tryParse(text);
                     if (amount == null || !amount.isFinite) {
                       return 'اكتب مبلغ صحيح';
                     }
@@ -465,9 +445,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
                   ),
                 );
               }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedAccount = value);
-              },
+              onChanged: (value) => setState(() => _selectedAccount = value),
             ),
           const SizedBox(height: 12),
           if (_remaining > 0)
@@ -480,12 +458,12 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _discountController,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
-            decoration: _decoration('خصم الفاتورة'),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _decoration('خصم الفاتورة (اختياري)'),
             validator: (value) {
-              final amount = double.tryParse(value?.trim() ?? '');
+              final text = value?.trim() ?? '';
+              if (text.isEmpty) return null;
+              final amount = double.tryParse(text);
               if (amount == null || !amount.isFinite) {
                 return 'اكتب خصم صحيح';
               }
@@ -552,9 +530,7 @@ class _SalesInvoiceScreenState extends State<SalesInvoiceScreen> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
     );
   }
 }
@@ -564,11 +540,7 @@ class _SaleLine {
   int quantity;
   double price;
 
-  _SaleLine({
-    required this.product,
-    required this.quantity,
-    required this.price,
-  });
+  _SaleLine({required this.product, required this.quantity, required this.price});
 
   double get subtotal => quantity * price;
 }
@@ -598,18 +570,15 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon),
+              Icon(icon, size: 20),
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           child,
         ],
       ),
