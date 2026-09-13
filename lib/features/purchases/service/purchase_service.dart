@@ -69,6 +69,17 @@ class PurchaseService {
         if (account.balance < purchase.paidAmount) throw Exception('رصيد الحساب مش كافي');
       }
 
+      purchase = Purchase(
+        id: purchase.id,
+        invoiceNumber: await _purchaseRepository.getNextDailyInvoiceNumberWithExecutor(txn, purchase.date),
+        supplierId: purchase.supplierId,
+        date: purchase.date,
+        items: purchase.items,
+        discount: purchase.discount,
+        paidAmount: purchase.paidAmount,
+        notes: purchase.notes,
+      );
+
       await _purchaseRepository.addPurchaseWithExecutor(txn, purchase);
       for (final item in purchase.items) {
         final product = productsById[item.productId];
