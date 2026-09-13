@@ -3,9 +3,14 @@ import 'package:dafter/features/accounts/widgets/transaction_tile.dart';
 import 'package:flutter/material.dart';
 
 class RecentTransactionsCard extends StatelessWidget {
-  final List<dynamic> transactions;
+  final List<AccountTransaction> transactions;
+  final Map<String, String> accountNames;
 
-  const RecentTransactionsCard({super.key, required this.transactions});
+  const RecentTransactionsCard({
+    super.key,
+    required this.transactions,
+    this.accountNames = const {},
+  });
 
   String _title(AccountTransaction transaction) {
     switch (transaction.type) {
@@ -55,25 +60,22 @@ class RecentTransactionsCard extends StatelessWidget {
       child: ListView.separated(
         padding: EdgeInsets.zero,
         itemCount: transactions.length > 10 ? 10 : transactions.length,
-        separatorBuilder: (_, _) =>
-            const Divider(height: 1, color: Color(0xFFE5E9EB)),
+        separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFFE5E9EB)),
         itemBuilder: (_, index) {
-          final transaction = transactions[index] as AccountTransaction;
+          final transaction = transactions[index];
           final isDebit = transaction.isDebit;
+          final accountName = accountNames[transaction.accountId] ?? 'حساب غير معروف';
           return TransactionTile(
-            icon: isDebit
-                ? Icons.arrow_upward_outlined
-                : Icons.arrow_downward_outlined,
+            icon: isDebit ? Icons.arrow_upward_outlined : Icons.arrow_downward_outlined,
             iconBg: isDebit ? const Color(0xFFFCEAEA) : const Color(0xFFE8F5E9),
             iconColor: isDebit ? Colors.red : Colors.green,
             title: transaction.description?.trim().isNotEmpty == true
                 ? transaction.description!
                 : _title(transaction),
-            subtitle: _title(transaction),
-            account: transaction.accountId,
+            subtitle: '${_title(transaction)} • $accountName',
+            account: accountName,
             date: _date(transaction.date),
-            amount:
-                '${isDebit ? '-' : '+'}${transaction.amount.toStringAsFixed(2)} جنيه',
+            amount: '${isDebit ? '-' : '+'}${transaction.amount.toStringAsFixed(2)} جنيه',
             amountColor: isDebit ? Colors.red : Colors.green,
           );
         },
