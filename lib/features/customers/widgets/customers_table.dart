@@ -32,72 +32,62 @@ class CustomersTable extends StatelessWidget {
               ),
             )
           : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 24,
-                columns: const [
-                  DataColumn(label: Text('العميل')),
-                  DataColumn(label: Text('التليفون')),
-                  DataColumn(label: Text('الرصيد')),
-                  DataColumn(label: Text('إجراءات')),
-                ],
-                rows: customers.map((customer) {
-                  final balanceColor =
-                      customer.balance > 0 ? Colors.red : Colors.green;
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        Text(
-                          customer.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      DataCell(Text(customer.phone ?? '-')),
-                      DataCell(
-                        Text(
-                          '${customer.balance.toStringAsFixed(2)} جنيه',
-                          style: TextStyle(
-                            color: balanceColor,
-                            fontWeight: FontWeight.w600,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 24,
+                  columns: const [
+                    DataColumn(label: Text('العميل')),
+                    DataColumn(label: Text('التليفون')),
+                    DataColumn(label: Text('الرصيد')),
+                    DataColumn(label: Text('إجراءات')),
+                  ],
+                  rows: customers.map((customer) {
+                    final balanceColor =
+                        customer.balance > 0 ? Colors.red : Colors.green;
+                    return DataRow(
+                      cells: [
+                        DataCell(
+                          Text(
+                            customer.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
-                      ),
-                      DataCell(
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.visibility_outlined,
-                                size: 18,
-                              ),
-                              tooltip: 'كشف الحساب',
-                              onPressed: () => onViewCustomer?.call(customer),
+                        DataCell(Text(customer.phone ?? '-')),
+                        DataCell(
+                          Text(
+                            '${customer.balance.toStringAsFixed(2)} جنيه',
+                            style: TextStyle(
+                              color: balanceColor,
+                              fontWeight: FontWeight.w600,
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.payments_outlined,
-                                size: 18,
-                              ),
-                              tooltip: 'تحصيل دفعة',
-                              onPressed: () =>
-                                  onRecordPayment?.call(customer),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: Colors.red,
-                              ),
-                              tooltip: 'حذف العميل',
-                              onPressed: () =>
-                                  onDeleteCustomer?.call(customer),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+                        DataCell(
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.visibility_outlined, size: 18),
+                                tooltip: 'كشف الحساب',
+                                onPressed: () => onViewCustomer?.call(customer),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.payments_outlined, size: 18),
+                                tooltip: 'تحصيل دفعة',
+                                onPressed: () => onRecordPayment?.call(customer),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                tooltip: 'حذف العميل',
+                                onPressed: () => onDeleteCustomer?.call(customer),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
               ),
             ),
     );
