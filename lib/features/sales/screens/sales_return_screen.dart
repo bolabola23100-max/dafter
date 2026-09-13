@@ -1,3 +1,4 @@
+import 'package:dafter/core/utils/id_generator.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/model/account.dart';
@@ -5,6 +6,7 @@ import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/model/sale_item.dart';
 import 'package:dafter/features/model/sale_return.dart';
+import 'package:dafter/features/sales/repo/sale_return_repository.dart';
 import 'package:dafter/features/sales/repo/sales_repository.dart';
 import 'package:dafter/features/sales/service/sale_return_service.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +20,7 @@ class SalesReturnScreen extends StatefulWidget {
 
 class _SalesReturnScreenState extends State<SalesReturnScreen> {
   final SalesRepository _salesRepository = SalesRepository();
+  final SaleReturnRepository _returnRepository = SaleReturnRepository();
   final ProductRepository _productRepository = ProductRepository();
   final AccountRepository _accountRepository = AccountRepository();
   final SaleReturnService _service = SaleReturnService();
@@ -28,6 +31,8 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   List<Sale> _sales = [];
   List<Account> _accounts = [];
   Map<String, Product> _products = {};
+  Map<String, int> _returnedQuantities = {};
+  double _previouslyRefunded = 0;
   Sale? _selectedSale;
   Account? _selectedAccount;
   final Map<String, TextEditingController> _quantityControllers = {};
@@ -72,21 +77,40 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     }
   }
 
-  void _selectSale(Sale? sale) {
+  Future<void> _selectSale(Sale? sale) async {
     for (final controller in _quantityControllers.values) {
       controller.dispose();
     }
     _quantityControllers.clear();
+
+    var returned = <String, int>{};
+    var previouslyRefunded = 0.0;
     if (sale != null) {
+      final previousReturns = await _returnRepository.getReturnsBySale(sale.id);
+      for (final previousReturn in previousReturns) {
+        previouslyRefunded += previousReturn.refundedAmount;
+        for (final item in previousReturn.items) {
+          returned.update(item.saleItemId, (value) => value + item.quantity, ifAbsent: () => item.quantity);
+        }
+      }
       for (final item in sale.items) {
         _quantityControllers[item.id] = TextEditingController(text: '0');
       }
     }
+
+    if (!mounted) return;
     setState(() {
       _selectedSale = sale;
+      _returnedQuantities = returned;
+      _previouslyRefunded = previouslyRefunded;
       _selectedAccount = null;
       _refundController.text = '0';
     });
+  }
+
+  int _availableQuantity(SaleItem item) {
+    final returned = _returnedQuantities[item.id] ?? 0;
+    return (item.quantity - returned).clamp(0, item.quantity);
   }
 
   double _effectiveUnitPrice(SaleItem item) {
@@ -99,11 +123,16 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     if (sale == null) return 0;
     double total = 0;
     for (final item in sale.items) {
-      final quantity =
-          int.tryParse(_quantityControllers[item.id]?.text.trim() ?? '') ?? 0;
+      final quantity = int.tryParse(_quantityControllers[item.id]?.text.trim() ?? '') ?? 0;
       total += quantity * _effectiveUnitPrice(item);
     }
     return total;
+  }
+
+  double _remainingToRefund() {
+    final sale = _selectedSale;
+    if (sale == null) return 0;
+    return (sale.paidAmount - _previouslyRefunded).clamp(0, double.infinity).toDouble();
   }
 
   Future<void> _save() async {
@@ -114,26 +143,28 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
       return;
     }
 
-    final returnId = _id();
+    final returnId = IdGenerator.generate();
     final returnItems = <SaleReturnItem>[];
     for (final item in sale.items) {
-      final quantity =
-          int.tryParse(_quantityControllers[item.id]?.text.trim() ?? '') ?? 0;
+      final quantity = int.tryParse(_quantityControllers[item.id]?.text.trim() ?? '') ?? 0;
       if (quantity < 0) {
         _message('الكمية لازم تكون صفر أو أكتر');
         return;
       }
+      final available = _availableQuantity(item);
+      if (quantity > available) {
+        _message('المرتجع من المنتج ده أكبر من المتاح. المتاح للمرتجع: $available');
+        return;
+      }
       if (quantity > 0) {
-        returnItems.add(
-          SaleReturnItem(
-            id: _id(),
-            returnId: returnId,
-            saleItemId: item.id,
-            productId: item.productId,
-            quantity: quantity,
-            price: _effectiveUnitPrice(item),
-          ),
-        );
+        returnItems.add(SaleReturnItem(
+          id: IdGenerator.generate(),
+          returnId: returnId,
+          saleItemId: item.id,
+          productId: item.productId,
+          quantity: quantity,
+          price: _effectiveUnitPrice(item),
+        ));
       }
     }
 
@@ -144,11 +175,15 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
 
     final total = returnItems.fold<double>(0, (sum, item) => sum + item.total);
     final refund = double.tryParse(_refundController.text.trim()) ?? -1;
-    if (refund < 0 || refund > total) {
+    final remainingToRefund = _remainingToRefund();
+    if (!refund.isFinite || refund < 0 || refund > total) {
       _message('المبلغ اللي هيرجع للعميل لازم يكون بين صفر وقيمة المرتجع');
       return;
     }
-
+    if (refund > remainingToRefund) {
+      _message('المبلغ اللي هيترد أكبر من المتبقي للرد. المتاح: ${remainingToRefund.toStringAsFixed(2)} جنيه');
+      return;
+    }
     if (refund > 0 && _selectedAccount == null) {
       _message('اختار الحساب اللي هتطلع منه الفلوس');
       return;
@@ -164,9 +199,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
           date: DateTime.now(),
           items: returnItems,
           refundedAmount: refund,
-          notes: _notesController.text.trim().isEmpty
-              ? null
-              : _notesController.text.trim(),
+          notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         ),
         accountId: _selectedAccount?.id,
       );
@@ -181,17 +214,13 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     }
   }
 
-  String _id() => DateTime.now().microsecondsSinceEpoch.toString();
-
   void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), behavior: SnackBarBehavior.floating),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), behavior: SnackBarBehavior.floating));
   }
 
   String _saleLabel(Sale sale) {
     final date = '${sale.date.day}/${sale.date.month}/${sale.date.year}';
-    return 'فاتورة ${sale.id} — $date — ${sale.total.toStringAsFixed(2)} جنيه';
+    return '${sale.displayInvoiceNumber} — $date — ${sale.total.toStringAsFixed(2)} جنيه';
   }
 
   @override
@@ -219,14 +248,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                           initialValue: _selectedSale,
                           isExpanded: true,
                           decoration: _decoration('اختار الفاتورة'),
-                          items: _sales
-                              .map(
-                                (sale) => DropdownMenuItem<Sale>(
-                                  value: sale,
-                                  child: Text(_saleLabel(sale)),
-                                ),
-                              )
-                              .toList(),
+                          items: _sales.map((sale) => DropdownMenuItem<Sale>(value: sale, child: Text(_saleLabel(sale)))).toList(),
                           onChanged: _selectSale,
                         ),
                       ),
@@ -241,14 +263,9 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                               Expanded(
                                 child: TextField(
                                   controller: _refundController,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   onChanged: (_) => setState(() {}),
-                                  decoration: _decoration(
-                                    'المبلغ اللي هيرجع للعميل',
-                                  ).copyWith(suffixText: 'جنيه'),
+                                  decoration: _decoration('المبلغ اللي هيرجع للعميل').copyWith(suffixText: 'جنيه'),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -256,43 +273,16 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                                 child: DropdownButtonFormField<Account>(
                                   initialValue: _selectedAccount,
                                   isExpanded: true,
-                                  decoration: _decoration(
-                                    'الحساب اللي هتطلع منه الفلوس',
-                                  ),
-                                  items: _accounts
-                                      .map(
-                                        (account) => DropdownMenuItem<Account>(
-                                          value: account,
-                                          child: Text(
-                                            '${account.name} — ${account.balance.toStringAsFixed(2)} جنيه',
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged:
-                                      (double.tryParse(
-                                                _refundController.text.trim(),
-                                              ) ??
-                                              0) >
-                                          0
-                                      ? (value) => setState(
-                                          () => _selectedAccount = value,
-                                        )
-                                      : null,
+                                  decoration: _decoration('الحساب اللي هتطلع منه الفلوس'),
+                                  items: _accounts.map((account) => DropdownMenuItem<Account>(value: account, child: Text('${account.name} — ${account.balance.toStringAsFixed(2)} جنيه'))).toList(),
+                                  onChanged: (double.tryParse(_refundController.text.trim()) ?? 0) > 0 ? (value) => setState(() => _selectedAccount = value) : null,
                                 ),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _card(
-                          title: 'ملاحظات',
-                          child: TextField(
-                            controller: _notesController,
-                            maxLines: 3,
-                            decoration: _decoration('ملاحظات اختيارية'),
-                          ),
-                        ),
+                        _card(title: 'ملاحظات', child: TextField(controller: _notesController, maxLines: 3, decoration: _decoration('ملاحظات اختيارية'))),
                         const SizedBox(height: 16),
                         _summaryCard(),
                         const SizedBox(height: 20),
@@ -300,19 +290,9 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                           alignment: Alignment.centerLeft,
                           child: ElevatedButton.icon(
                             onPressed: _isSaving ? null : _save,
-                            icon: _isSaving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
+                            icon: _isSaving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_outlined),
                             label: Text(_isSaving ? 'بيحفظ...' : 'حفظ المرتجع'),
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size(180, 50),
-                            ),
+                            style: ElevatedButton.styleFrom(minimumSize: const Size(180, 50)),
                           ),
                         ),
                       ] else
@@ -332,29 +312,18 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         children: sale.items.map((item) {
           final product = _products[item.productId];
           final controller = _quantityControllers[item.id]!;
+          final returned = _returnedQuantities[item.id] ?? 0;
+          final available = _availableQuantity(item);
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               children: [
-                Expanded(
-                  flex: 4,
-                  child: Text(product?.name ?? 'منتج مش موجود'),
-                ),
+                Expanded(flex: 4, child: Text(product?.name ?? 'منتج مش موجود')),
                 Expanded(child: Text('اتباع: ${item.quantity}')),
-                Expanded(
-                  child: Text(
-                    '${_effectiveUnitPrice(item).toStringAsFixed(2)} جنيه',
-                  ),
-                ),
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: controller,
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
-                    decoration: _decoration('المرتجع'),
-                  ),
-                ),
+                Expanded(child: Text('مرتجع: $returned', style: TextStyle(color: returned > 0 ? Colors.orange.shade800 : null))),
+                Expanded(child: Text('متاح: $available')),
+                Expanded(child: Text('${_effectiveUnitPrice(item).toStringAsFixed(2)} جنيه')),
+                SizedBox(width: 130, child: TextField(controller: controller, keyboardType: TextInputType.number, onChanged: (_) => setState(() {}), decoration: _decoration('مرتجع الآن'))),
               ],
             ),
           );
@@ -366,18 +335,16 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
   Widget _summaryCard() {
     final total = _returnTotal();
     final refund = double.tryParse(_refundController.text.trim()) ?? 0;
+    final remainingToRefund = _remainingToRefund();
     final credit = (total - refund).clamp(0, double.infinity).toDouble();
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E9EB)),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
       child: Row(
         children: [
           Expanded(child: _summary('قيمة المرتجع', total)),
-          Expanded(child: _summary('فلوس راجعة', refund)),
+          Expanded(child: _summary('المدفوع سابقًا', _previouslyRefunded)),
+          Expanded(child: _summary('المتبقي للرد', remainingToRefund)),
           Expanded(child: _summary('هيتخصم من حساب العميل', credit)),
         ],
       ),
@@ -389,10 +356,7 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
         children: [
           Text(label, style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 6),
-          Text(
-            '${value.toStringAsFixed(2)} جنيه',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          Text('${value.toStringAsFixed(2)} جنيه', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ],
       );
 
@@ -406,18 +370,11 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
 
   Widget _card({required String title, required Widget child}) => Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E9EB)),
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE5E9EB))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
+            Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
             const SizedBox(height: 18),
             child,
           ],

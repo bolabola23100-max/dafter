@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dafter/core/database/app_database_watcher.dart';
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/model/product.dart';
@@ -12,25 +15,59 @@ class TopBar extends StatefulWidget {
 
 class _TopBarState extends State<TopBar> {
   final ProductRepository _productRepository = ProductRepository();
+  final AppDatabaseWatcher _databaseWatcher = AppDatabaseWatcher.instance;
+  Timer? _notificationTimer;
   int _notificationCount = 0;
+  bool _loadingNotifications = false;
 
   @override
   void initState() {
     super.initState();
+    _databaseWatcher.addListener(_onDatabaseChanged);
+    _loadNotifications();
+
+    // Keep the badge fresh even if a database write happens through a code
+    // path that does not trigger the watcher (for example the same SQLite
+    // connection). The query is a cheap COUNT(*) rather than loading products.
+    _notificationTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _loadNotifications(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _notificationTimer?.cancel();
+    _databaseWatcher.removeListener(_onDatabaseChanged);
+    super.dispose();
+  }
+
+  void _onDatabaseChanged() {
     _loadNotifications();
   }
 
   Future<List<Product>> _loadLowStockProducts() async {
     final products = await _productRepository.getProducts();
-    return products.where((product) => product.quantity <= product.minQuantity).toList();
+    return products
+        .where((product) => product.quantity <= product.minQuantity)
+        .toList();
   }
 
   Future<void> _loadNotifications() async {
+    if (_loadingNotifications) return;
+    _loadingNotifications = true;
     try {
-      final products = await _loadLowStockProducts();
-      if (mounted) setState(() => _notificationCount = products.length);
+      final count = await _productRepository.getLowStockCount();
+      if (!mounted) return;
+      if (_notificationCount != count) {
+        setState(() => _notificationCount = count);
+      }
     } catch (_) {
-      if (mounted) setState(() => _notificationCount = 0);
+      if (mounted && _notificationCount != 0) {
+        setState(() => _notificationCount = 0);
+      }
+    } finally {
+      _loadingNotifications = false;
     }
   }
 
@@ -57,9 +94,13 @@ class _TopBarState extends State<TopBar> {
             itemBuilder: (context, index) {
               final product = products[index];
               return ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.warning_amber_outlined)),
+                leading: const CircleAvatar(
+                  child: Icon(Icons.warning_amber_outlined),
+                ),
                 title: Text('المخزون قليل: ${product.name}'),
-                subtitle: Text('المتاح ${product.quantity} — الحد الأدنى ${product.minQuantity}'),
+                subtitle: Text(
+                  'المتاح ${product.quantity} — الحد الأدنى ${product.minQuantity}',
+                ),
               );
             },
           ),
@@ -78,7 +119,10 @@ class _TopBarState extends State<TopBar> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          const Text('dafter', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          const Text(
+            'dafter',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(width: 20),
           Expanded(
             child: ConstrainedBox(
@@ -114,14 +158,21 @@ class _TopBarState extends State<TopBar> {
                   right: 4,
                   top: 4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       '$_notificationCount',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),

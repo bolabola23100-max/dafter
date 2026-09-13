@@ -31,6 +31,15 @@ class ProductRepository {
     return (await db.query(DatabaseTables.products, orderBy: 'name ASC')).map(_fromMap).toList();
   }
 
+  Future<int> getLowStockCount() async {
+    final db = await _database.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM ${DatabaseTables.products} '
+      'WHERE quantity <= min_quantity',
+    );
+    return (result.first['count'] as num?)?.toInt() ?? 0;
+  }
+
   Future<Product?> getProductById(String id) async {
     final db = await _database.database;
     return getProductByIdWithExecutor(db, id);

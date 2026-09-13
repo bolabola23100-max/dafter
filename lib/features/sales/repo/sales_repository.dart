@@ -17,6 +17,7 @@ class SalesRepository {
   Future<void> addSaleWithExecutor(DatabaseExecutor executor, Sale sale) async {
     await executor.insert(DatabaseTables.sales, {
       'id': sale.id,
+      'invoice_number': sale.invoiceNumber,
       'customer_id': sale.customerId,
       'date': sale.date.toIso8601String(),
       'subtotal': sale.subtotal,
@@ -38,6 +39,20 @@ class SalesRepository {
         'cost_price': item.costPrice,
       });
     }
+  }
+
+  Future<int> getNextDailyInvoiceNumberWithExecutor(
+    DatabaseExecutor executor,
+    DateTime date,
+  ) async {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    final result = await executor.rawQuery(
+      'SELECT COALESCE(MAX(invoice_number), 0) + 1 AS next_number '
+      'FROM ${DatabaseTables.sales} WHERE date >= ? AND date < ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['next_number'] as num).toInt();
   }
 
   Future<List<Sale>> getSales() async {
@@ -85,6 +100,7 @@ class SalesRepository {
 
     return Sale(
       id: row['id'] as String,
+      invoiceNumber: (row['invoice_number'] as num?)?.toInt(),
       customerId: row['customer_id'] as String?,
       date: DateTime.parse(row['date'] as String),
       items: items,

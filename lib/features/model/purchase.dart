@@ -2,6 +2,7 @@ import 'purchase_item.dart';
 
 class Purchase {
   final String id;
+  final int? invoiceNumber;
   final String? supplierId;
 
   final DateTime date;
@@ -15,6 +16,7 @@ class Purchase {
 
   Purchase({
     required this.id,
+    this.invoiceNumber,
     this.supplierId,
     required this.date,
     required this.items,
@@ -34,4 +36,7 @@ class Purchase {
   double get remainingAmount {
     return total - paidAmount;
   }
+
+  String get displayInvoiceNumber =>
+      invoiceNumber == null ? 'فاتورة شراء' : 'فاتورة شراء $invoiceNumber';
 }
