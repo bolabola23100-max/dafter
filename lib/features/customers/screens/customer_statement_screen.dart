@@ -224,7 +224,9 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
 
   Widget _buildTransactions() {
     final rows = <Widget>[];
-    for (final sale in _sales) rows.add(_buildSaleTile(sale));
+    for (final sale in _sales) {
+      rows.add(_buildSaleTile(sale));
+    }
     for (final saleReturn in _returns) {
       final credit = (saleReturn.total - saleReturn.refundedAmount).clamp(0.0, double.infinity).toDouble();
       rows.add(
