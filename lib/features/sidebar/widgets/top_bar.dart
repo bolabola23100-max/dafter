@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dafter/core/database/app_database_watcher.dart';
 import 'package:dafter/core/widgets/custom_text_form_field.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
@@ -14,6 +16,7 @@ class TopBar extends StatefulWidget {
 class _TopBarState extends State<TopBar> {
   final ProductRepository _productRepository = ProductRepository();
   final AppDatabaseWatcher _databaseWatcher = AppDatabaseWatcher.instance;
+  Timer? _notificationTimer;
   int _notificationCount = 0;
   bool _loadingNotifications = false;
 
@@ -22,10 +25,19 @@ class _TopBarState extends State<TopBar> {
     super.initState();
     _databaseWatcher.addListener(_onDatabaseChanged);
     _loadNotifications();
+
+    // Keep the badge fresh even if a database write happens through a code
+    // path that does not trigger the watcher (for example the same SQLite
+    // connection). The query is a cheap COUNT(*) rather than loading products.
+    _notificationTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _loadNotifications(),
+    );
   }
 
   @override
   void dispose() {
+    _notificationTimer?.cancel();
     _databaseWatcher.removeListener(_onDatabaseChanged);
     super.dispose();
   }
@@ -45,9 +57,8 @@ class _TopBarState extends State<TopBar> {
     if (_loadingNotifications) return;
     _loadingNotifications = true;
     try {
-      final products = await _loadLowStockProducts();
+      final count = await _productRepository.getLowStockCount();
       if (!mounted) return;
-      final count = products.length;
       if (_notificationCount != count) {
         setState(() => _notificationCount = count);
       }
