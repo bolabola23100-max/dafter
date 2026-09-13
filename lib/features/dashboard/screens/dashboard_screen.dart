@@ -1,10 +1,12 @@
 import 'package:dafter/core/widgets/action_button.dart';
 import 'package:dafter/features/Products/repo/product_repository.dart';
 import 'package:dafter/features/Products/screens/add_product_screen.dart';
+import 'package:dafter/features/accounts/repo/payment_repository.dart';
 import 'package:dafter/features/customers/repo/customer_repository.dart';
 import 'package:dafter/features/dashboard/widgets/inventory_status_card.dart';
 import 'package:dafter/features/dashboard/widgets/receivables_card.dart';
 import 'package:dafter/features/dashboard/widgets/summary_card.dart';
+import 'package:dafter/features/model/payment.dart';
 import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/model/sale_return.dart';
@@ -25,12 +27,14 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final _salesRepository = SalesRepository();
   final _saleReturnRepository = SaleReturnRepository();
+  final _paymentRepository = PaymentRepository();
   final _productRepository = ProductRepository();
   final _customerRepository = CustomerRepository();
   final _supplierRepository = SupplierRepository();
   bool _loading = true;
   List<Sale> _sales = [];
   List<SaleReturn> _saleReturns = [];
+  List<Payment> _payments = [];
   List<Product> _products = [];
   double _customerDue = 0;
   double _supplierDue = 0;
@@ -46,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final results = await Future.wait([
         _salesRepository.getSales(),
         _saleReturnRepository.getReturns(),
+        _paymentRepository.getPayments(),
         _productRepository.getProducts(),
         _customerRepository.getCustomers(),
         _supplierRepository.getSuppliers(),
@@ -54,12 +59,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         _sales = results[0] as List<Sale>;
         _saleReturns = results[1] as List<SaleReturn>;
-        _products = results[2] as List<Product>;
-        _customerDue = (results[3] as List).fold<double>(
+        _payments = results[2] as List<Payment>;
+        _products = results[3] as List<Product>;
+        _customerDue = (results[4] as List).fold<double>(
           0,
           (sum, item) => sum + (item.balance as double),
         );
-        _supplierDue = (results[4] as List).fold<double>(
+        _supplierDue = (results[5] as List).fold<double>(
           0,
           (sum, item) => sum + (item.balance as double),
         );
@@ -76,6 +82,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Sale> get _todaySales {
     final now = DateTime.now();
     return _sales.where((sale) => _sameDay(sale.date, now)).toList();
+  }
+
+  List<SaleReturn> get _todayReturns {
+    final now = DateTime.now();
+    return _saleReturns.where((item) => _sameDay(item.date, now)).toList();
+  }
+
+  List<Payment> get _todayCustomerReceipts {
+    final now = DateTime.now();
+    return _payments.where((payment) {
+      return payment.type == PaymentType.receipt &&
+          payment.personId != null &&
+          _sameDay(payment.date, now);
+    }).toList();
+  }
+
+  double get _todayCollected {
+    final salesPaid = _todaySales.fold<double>(
+      0,
+      (sum, sale) => sum + sale.paidAmount,
+    );
+    final customerReceipts = _todayCustomerReceipts.fold<double>(
+      0,
+      (sum, payment) => sum + payment.amount,
+    );
+    final refunds = _todayReturns.fold<double>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.refundedAmount,
+    );
+    return (salesPaid + customerReceipts - refunds)
+        .clamp(0, double.infinity)
+        .toDouble();
   }
 
   double get _todayTotal {
@@ -181,8 +219,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       icon: Icons.account_balance_wallet_outlined,
                       iconBg: const Color(0xFFF3E9DD),
                       iconColor: const Color(0xFF9C6B30),
-                      value: _money(_todayProfit),
-                      label: 'مكسب النهارده',
+                      value: _money(_todayCollected),
+                      label: 'المقبوض النهارده',
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -201,8 +239,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       icon: Icons.trending_up,
                       iconBg: const Color(0xFFDDEDEC),
                       iconColor: const Color(0xFF0E4C4C),
-                      value: _money(_todayTotal),
-                      label: 'صافي مبيعات النهارده',
+                      value: _money(_todayProfit),
+                      label: 'مكسب النهارده',
                     ),
                   ),
                 ],
