@@ -89,6 +89,18 @@ class SalesService {
         item.costPrice = product.purchasePrice;
       }
 
+      sale = Sale(
+        id: sale.id,
+        invoiceNumber: await _salesRepository.getNextDailyInvoiceNumberWithExecutor(txn, sale.date),
+        customerId: sale.customerId,
+        date: sale.date,
+        items: sale.items,
+        discount: sale.discount,
+        paidAmount: sale.paidAmount,
+        paymentStatus: sale.paymentStatus,
+        notes: sale.notes,
+      );
+
       await _salesRepository.addSaleWithExecutor(txn, sale);
       for (final item in sale.items) {
         final product = productsById[item.productId];
