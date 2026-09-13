@@ -12,13 +12,19 @@ class AccountRepository {
   void _validateAccount(Account account) {
     if (account.id.trim().isEmpty) throw ArgumentError('معرف الحساب غير صالح');
     if (account.name.trim().isEmpty) throw ArgumentError('اسم الحساب مطلوب');
-    if (!account.openingBalance.isFinite || !account.balance.isFinite) {
+    if (!account.openingBalance.isFinite || account.openingBalance < 0) {
+      throw ArgumentError('الرصيد الافتتاحي غير صالح');
+    }
+    if (!account.balance.isFinite) {
       throw ArgumentError('رصيد الحساب غير صالح');
     }
   }
 
   Future<void> addAccount(Account account) async {
     _validateAccount(account);
+    if ((account.balance - account.openingBalance).abs() > 0.009) {
+      throw ArgumentError('الرصيد عند إنشاء الحساب لازم يساوي الرصيد الافتتاحي');
+    }
 
     final db = await _database.database;
     await db.insert(DatabaseTables.accounts, {
@@ -74,6 +80,7 @@ class AccountRepository {
     String accountId,
     double newBalance,
   ) async {
+    if (accountId.trim().isEmpty) throw ArgumentError('معرف الحساب غير صالح');
     if (!newBalance.isFinite) {
       throw ArgumentError.value(newBalance, 'newBalance', 'رصيد الحساب غير صالح');
     }
@@ -86,8 +93,11 @@ class AccountRepository {
     if (updated == 0) throw Exception('الحساب مش موجود');
   }
 
+  /// Edits account metadata only. Opening/current balances are deliberately
+  /// immutable here so accounting history cannot be silently changed.
   Future<void> updateAccount(Account account) async {
-    _validateAccount(account);
+    if (account.id.trim().isEmpty) throw ArgumentError('معرف الحساب غير صالح');
+    if (account.name.trim().isEmpty) throw ArgumentError('اسم الحساب مطلوب');
 
     final db = await _database.database;
     final updated = await db.update(
@@ -95,8 +105,6 @@ class AccountRepository {
       {
         'name': account.name.trim(),
         'type': account.type.name,
-        'opening_balance': account.openingBalance,
-        'balance': account.balance,
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
@@ -106,7 +114,26 @@ class AccountRepository {
   }
 
   Future<void> deleteAccount(String id) async {
+    if (id.trim().isEmpty) throw ArgumentError('معرف الحساب غير صالح');
+
     final db = await _database.database;
+    final account = await getAccountById(id);
+    if (account == null) throw Exception('الحساب مش موجود');
+
+    final transactions = await db.query(
+      DatabaseTables.accountTransactions,
+      where: 'account_id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (transactions.isNotEmpty) {
+      throw Exception('مينفعش تحذف حساب عليه حركات مالية. احتفظ بالسجل واستخدم حسابًا جديدًا بدلًا منه.');
+    }
+
+    if (account.balance.abs() > 0.009) {
+      throw Exception('مينفعش تحذف حساب فيه رصيد. صفّي الرصيد أولًا.');
+    }
+
     await db.delete(DatabaseTables.accounts, where: 'id = ?', whereArgs: [id]);
   }
 
