@@ -1,7 +1,6 @@
 import 'package:dafter/features/accounts/repo/account_repository.dart';
 import 'package:dafter/features/accounts/repo/account_transaction_repository.dart';
 import 'package:dafter/features/model/account.dart';
-import 'package:dafter/features/model/account_transaction.dart';
 import 'package:flutter/material.dart';
 
 class AccountBalancesScreen extends StatefulWidget {
@@ -69,7 +68,7 @@ class _AccountBalancesScreenState extends State<AccountBalancesScreen> {
         actions: [
           IconButton(
             tooltip: 'تحديث',
-            onPressed: _loading ? null : _loadData,
+            onPressed: _loading ? null : () => _loadData(),
             icon: const Icon(Icons.refresh),
           ),
         ],
