@@ -1,4 +1,6 @@
 import 'package:dafter/features/Products/repo/product_repository.dart';
+import 'package:dafter/features/customers/repo/customer_repository.dart';
+import 'package:dafter/features/model/customer.dart';
 import 'package:dafter/features/model/product.dart';
 import 'package:dafter/features/model/sale.dart';
 import 'package:dafter/features/sales/repo/sale_return_repository.dart';
@@ -18,10 +20,12 @@ class _SalesScreenState extends State<SalesScreen> {
   final _repository = SalesRepository();
   final _returns = SaleReturnRepository();
   final _productRepository = ProductRepository();
+  final _customerRepository = CustomerRepository();
   List<Sale> _sales = [];
   Map<String, double> _returnedTotals = {};
   Map<String, double> _refundedTotals = {};
   Map<String, Product> _products = {};
+  Map<String, Customer> _customers = {};
   bool _loading = true;
 
   @override
@@ -37,15 +41,21 @@ class _SalesScreenState extends State<SalesScreen> {
         _repository.getSales(),
         _returns.getReturns(),
         _productRepository.getProducts(),
+        _customerRepository.getCustomers(),
       ]);
       final sales = results[0] as List<Sale>;
       final returns = results[1] as List<dynamic>;
       final products = results[2] as List<Product>;
+      final customers = results[3] as List<Customer>;
       final totals = <String, double>{};
       final refunds = <String, double>{};
       for (final r in returns) {
         totals.update(r.saleId, (v) => v + r.total, ifAbsent: () => r.total);
-        refunds.update(r.saleId, (v) => v + r.refundedAmount, ifAbsent: () => r.refundedAmount);
+        refunds.update(
+          r.saleId,
+          (v) => v + r.refundedAmount,
+          ifAbsent: () => r.refundedAmount,
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -53,6 +63,7 @@ class _SalesScreenState extends State<SalesScreen> {
         _returnedTotals = totals;
         _refundedTotals = refunds;
         _products = {for (final product in products) product.id: product};
+        _customers = {for (final customer in customers) customer.id: customer};
         _loading = false;
       });
     } catch (_) {
@@ -73,13 +84,22 @@ class _SalesScreenState extends State<SalesScreen> {
 
   String _money(double value) => '${value.toStringAsFixed(2)} جنيه';
 
-  String _date(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  String _date(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  String _customerName(Sale sale) {
+    if (sale.customerId == null) return 'عميل نقدي';
+    return _customers[sale.customerId!]?.name ?? 'عميل غير مسجل';
+  }
 
   double _adjustedRemaining(Sale sale, String saleId) {
     final returned = _returnedTotals[saleId] ?? 0;
     final refunded = _refundedTotals[saleId] ?? 0;
-    final amountAppliedToBalance = (returned - refunded).clamp(0, double.infinity);
-    return (sale.remainingAmount - amountAppliedToBalance).clamp(0, double.infinity).toDouble();
+    final amountAppliedToBalance =
+        (returned - refunded).clamp(0, double.infinity);
+    return (sale.remainingAmount - amountAppliedToBalance)
+        .clamp(0, double.infinity)
+        .toDouble();
   }
 
   Future<void> _showSaleDetails(Sale sale) async {
@@ -88,13 +108,26 @@ class _SalesScreenState extends State<SalesScreen> {
     final returnedByItem = <String, int>{};
     for (final saleReturn in saleReturns) {
       for (final item in saleReturn.items) {
-        returnedByItem.update(item.saleItemId, (value) => value + item.quantity, ifAbsent: () => item.quantity);
+        returnedByItem.update(
+          item.saleItemId,
+          (value) => value + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
       }
     }
-    final returnedTotal = saleReturns.fold<double>(0, (sum, saleReturn) => sum + saleReturn.total);
-    final refundedTotal = saleReturns.fold<double>(0, (sum, saleReturn) => sum + saleReturn.refundedAmount);
+    final returnedTotal = saleReturns.fold<double>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.total,
+    );
+    final refundedTotal = saleReturns.fold<double>(
+      0,
+      (sum, saleReturn) => sum + saleReturn.refundedAmount,
+    );
     final net = sale.total - returnedTotal;
-    final remainingBalance = (sale.remainingAmount - (returnedTotal - refundedTotal).clamp(0, double.infinity)).clamp(0, double.infinity).toDouble();
+    final remainingBalance =
+        (sale.remainingAmount - (returnedTotal - refundedTotal).clamp(0, double.infinity))
+            .clamp(0, double.infinity)
+            .toDouble();
 
     await showDialog<void>(
       context: context,
@@ -106,6 +139,8 @@ class _SalesScreenState extends State<SalesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Text('العميل: ${_customerName(sale)}'),
+                const SizedBox(height: 8),
                 Text('التاريخ: ${_date(sale.date)}'),
                 const SizedBox(height: 8),
                 Text('إجمالي الفاتورة الأصلي: ${_money(sale.total)}'),
@@ -116,37 +151,65 @@ class _SalesScreenState extends State<SalesScreen> {
                   Text('الفلوس المرتجعة: ${_money(refundedTotal)}'),
                 ],
                 const SizedBox(height: 4),
-                Text('صافي المبيعات: ${_money(net)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  'صافي المبيعات: ${_money(net)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 4),
                 Text('المتبقي على العميل الآن: ${_money(remainingBalance)}'),
                 const Divider(height: 28),
-                const Text('الأصناف', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text(
+                  'الأصناف',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
                 const SizedBox(height: 10),
                 ...sale.items.map((item) {
                   final returned = returnedByItem[item.id] ?? 0;
-                  final remaining = (item.quantity - returned).clamp(0, item.quantity).toInt();
-                  final productName = _products[item.productId]?.name ?? item.productId;
+                  final remaining =
+                      (item.quantity - returned).clamp(0, item.quantity).toInt();
+                  final productName =
+                      _products[item.productId]?.name ?? item.productId;
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFFE5E9EB)), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE5E9EB)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     child: Row(
                       children: [
                         Expanded(flex: 3, child: Text(productName)),
                         Expanded(child: Text('باع: ${item.quantity}')),
                         Expanded(child: Text('مرتجع: $returned')),
-                        Expanded(child: Text('متاح: $remaining', style: TextStyle(fontWeight: FontWeight.bold, color: remaining == 0 ? Colors.grey : null))),
+                        Expanded(
+                          child: Text(
+                            'متاح: $remaining',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: remaining == 0 ? Colors.grey : null,
+                            ),
+                          ),
+                        ),
                         Expanded(child: Text(_money(item.subtotal))),
                       ],
                     ),
                   );
                 }),
-                if (saleReturns.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('مفيش مرتجعات على الفاتورة دي.')),
+                if (saleReturns.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text('مفيش مرتجعات على الفاتورة دي.'),
+                  ),
               ],
             ),
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إغلاق'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إغلاق'),
+          ),
+        ],
       ),
     );
   }
@@ -154,8 +217,12 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final total = _sales.fold<double>(0, (s, sale) => s + sale.total);
-    final returned = _returnedTotals.values.fold<double>(0, (s, v) => s + v);
-    final remaining = _sales.fold<double>(0, (s, sale) => s + _adjustedRemaining(sale, sale.id));
+    final returned =
+        _returnedTotals.values.fold<double>(0, (s, v) => s + v);
+    final remaining = _sales.fold<double>(
+      0,
+      (s, sale) => s + _adjustedRemaining(sale, sale.id),
+    );
     final netSales = total - returned;
 
     return Padding(
@@ -169,27 +236,61 @@ class _SalesScreenState extends State<SalesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('المبيعات', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(
+                      'المبيعات',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
                     SizedBox(height: 4),
-                    Text('كل فواتير البيع والمرتجعات والمدفوعات', style: TextStyle(color: Colors.grey)),
+                    Text(
+                      'كل فواتير البيع والمرتجعات والمدفوعات',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                   ],
                 ),
               ),
-              OutlinedButton.icon(onPressed: () => _open(const SalesReturnScreen()), icon: const Icon(Icons.assignment_return_outlined), label: const Text('مرتجع بيع')),
+              OutlinedButton.icon(
+                onPressed: () => _open(const SalesReturnScreen()),
+                icon: const Icon(Icons.assignment_return_outlined),
+                label: const Text('مرتجع بيع'),
+              ),
               const SizedBox(width: 10),
-              FilledButton.icon(onPressed: () => _open(const SalesInvoiceScreen()), icon: const Icon(Icons.add), label: const Text('فاتورة بيع جديدة')),
+              FilledButton.icon(
+                onPressed: () => _open(const SalesInvoiceScreen()),
+                icon: const Icon(Icons.add),
+                label: const Text('فاتورة بيع جديدة'),
+              ),
             ],
           ),
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _summary('إجمالي البيع', total, Icons.shopping_cart_outlined)),
+              Expanded(
+                child: _summary(
+                  'إجمالي البيع',
+                  total,
+                  Icons.shopping_cart_outlined,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _summary('المرتجعات', returned, Icons.assignment_return_outlined)),
+              Expanded(
+                child: _summary(
+                  'المرتجعات',
+                  returned,
+                  Icons.assignment_return_outlined,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _summary('صافي المبيعات', netSales, Icons.trending_up)),
+              Expanded(
+                child: _summary('صافي المبيعات', netSales, Icons.trending_up),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _summary('الباقي', remaining, Icons.pending_actions_outlined)),
+              Expanded(
+                child: _summary(
+                  'الباقي',
+                  remaining,
+                  Icons.pending_actions_outlined,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -207,20 +308,53 @@ class _SalesScreenState extends State<SalesScreen> {
                             final sale = _sales[index];
                             final returnTotal = _returnedTotals[sale.id] ?? 0;
                             final net = sale.total - returnTotal;
-                            final adjustedRemaining = _adjustedRemaining(sale, sale.id);
-                            final status = adjustedRemaining <= 0 ? 'مدفوعة' : sale.paidAmount > 0 ? 'جزئي' : 'آجل';
+                            final adjustedRemaining =
+                                _adjustedRemaining(sale, sale.id);
+                            final status = adjustedRemaining <= 0
+                                ? 'مدفوعة'
+                                : sale.paidAmount > 0
+                                    ? 'جزئي'
+                                    : 'آجل';
                             return ListTile(
                               onTap: () => _showSaleDetails(sale),
-                              leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
-                              title: Text(sale.displayInvoiceNumber, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: Text('${_date(sale.date)} • ${sale.items.length} أصناف • $status${returnTotal > 0 ? ' • مرتجع ${_money(returnTotal)}' : ''}'),
+                              leading: const CircleAvatar(
+                                child: Icon(Icons.receipt_long_outlined),
+                              ),
+                              title: Text(
+                                sale.displayInvoiceNumber,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                '${_customerName(sale)} • ${_date(sale.date)} • ${sale.items.length} أصناف • $status${returnTotal > 0 ? ' • مرتجع ${_money(returnTotal)}' : ''}',
+                              ),
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text('صافي ${_money(net)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  if (returnTotal > 0) Text('الأصلي ${_money(sale.total)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                  if (adjustedRemaining > 0) Text('باقي ${_money(adjustedRemaining)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  Text(
+                                    'صافي ${_money(net)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (returnTotal > 0)
+                                    Text(
+                                      'الأصلي ${_money(sale.total)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  if (adjustedRemaining > 0)
+                                    Text(
+                                      'باقي ${_money(adjustedRemaining)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
                                 ],
                               ),
                             );
@@ -245,9 +379,18 @@ class _SalesScreenState extends State<SalesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text(
+                    title,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                   const SizedBox(height: 5),
-                  Text(_money(value), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  Text(
+                    _money(value),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                    ),
+                  ),
                 ],
               ),
             ),
