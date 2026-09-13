@@ -23,6 +23,7 @@ class PurchaseRepository {
   ) async {
     await executor.insert(DatabaseTables.purchases, {
       'id': purchase.id,
+      'invoice_number': purchase.invoiceNumber,
       'supplier_id': purchase.supplierId,
       'date': purchase.date.toIso8601String(),
       'subtotal': purchase.subtotal,
@@ -43,6 +44,20 @@ class PurchaseRepository {
         'subtotal': item.subtotal,
       });
     }
+  }
+
+  Future<int> getNextDailyInvoiceNumberWithExecutor(
+    DatabaseExecutor executor,
+    DateTime date,
+  ) async {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    final result = await executor.rawQuery(
+      'SELECT COALESCE(MAX(invoice_number), 0) + 1 AS next_number '
+      'FROM ${DatabaseTables.purchases} WHERE date >= ? AND date < ?',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return (result.first['next_number'] as num).toInt();
   }
 
   Future<List<Purchase>> getPurchases() async {
@@ -132,6 +147,7 @@ class PurchaseRepository {
 
     return Purchase(
       id: map['id'] as String,
+      invoiceNumber: (map['invoice_number'] as num?)?.toInt(),
       supplierId: map['supplier_id'] as String?,
       date: DateTime.parse(map['date'] as String),
       items: itemsResult.map(_itemFromMap).toList(),
