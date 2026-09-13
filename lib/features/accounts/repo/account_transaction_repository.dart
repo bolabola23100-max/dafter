@@ -18,7 +18,15 @@ class AccountTransactionRepository {
     DatabaseExecutor executor,
     AccountTransaction transaction,
   ) async {
-    if (transaction.amount <= 0) throw Exception('قيمة الحركة لازم تكون أكبر من صفر');
+    if (transaction.id.trim().isEmpty) {
+      throw Exception('معرف الحركة غير صالح');
+    }
+    if (transaction.accountId.trim().isEmpty) {
+      throw Exception('الحساب المرتبط بالحركة غير صالح');
+    }
+    if (!transaction.amount.isFinite || transaction.amount <= 0) {
+      throw Exception('قيمة الحركة لازم تكون رقمًا صحيحًا وأكبر من صفر');
+    }
     await executor.insert(DatabaseTables.accountTransactions, {
       'id': transaction.id,
       'account_id': transaction.accountId,
@@ -33,7 +41,10 @@ class AccountTransactionRepository {
 
   Future<List<AccountTransaction>> getTransactions() async {
     final db = await _database.database;
-    final result = await db.query(DatabaseTables.accountTransactions, orderBy: 'date DESC');
+    final result = await db.query(
+      DatabaseTables.accountTransactions,
+      orderBy: 'date DESC',
+    );
     return result.map(_fromMap).toList();
   }
 
