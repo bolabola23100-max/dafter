@@ -3,7 +3,7 @@ import 'package:dafter/features/model/category.dart';
 import 'package:dafter/features/model/product.dart';
 import 'package:flutter/material.dart';
 
-class ProductsTable extends StatelessWidget {
+class ProductsTable extends StatefulWidget {
   final List<Product> products;
   final List<Category> categories;
   final void Function(Product) onEditProduct;
@@ -17,9 +17,24 @@ class ProductsTable extends StatelessWidget {
     this.onDeleteProduct,
   });
 
+  @override
+  State<ProductsTable> createState() => _ProductsTableState();
+}
+
+class _ProductsTableState extends State<ProductsTable> {
+  final _verticalController = ScrollController();
+  final _horizontalController = ScrollController();
+
+  @override
+  void dispose() {
+    _verticalController.dispose();
+    _horizontalController.dispose();
+    super.dispose();
+  }
+
   String _getCategoryName(Product product) {
     if (product.categoryId == null) return '-';
-    for (final category in categories) {
+    for (final category in widget.categories) {
       if (category.id == product.categoryId) return category.name;
     }
     return '-';
@@ -41,13 +56,17 @@ class ProductsTable extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE5E9EB)),
       ),
       child: Scrollbar(
+        controller: _verticalController,
         thumbVisibility: true,
         child: SingleChildScrollView(
+          controller: _verticalController,
           child: Scrollbar(
+            controller: _horizontalController,
             thumbVisibility: true,
             notificationPredicate: (notification) =>
                 notification.metrics.axis == Axis.horizontal,
             child: SingleChildScrollView(
+              controller: _horizontalController,
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 columnSpacing: 24,
@@ -61,7 +80,7 @@ class ProductsTable extends StatelessWidget {
                   DataColumn(label: Text('الحالة')),
                   DataColumn(label: Text('إجراءات')),
                 ],
-                rows: products.map((product) {
+                rows: widget.products.map((product) {
                   return DataRow(
                     cells: [
                       DataCell(Text(product.name, style: const TextStyle(fontWeight: FontWeight.w600))),
@@ -78,12 +97,14 @@ class ProductsTable extends StatelessWidget {
                             IconButton(
                               tooltip: 'تعديل',
                               icon: const Icon(Icons.edit_outlined, size: 18),
-                              onPressed: () => onEditProduct(product),
+                              onPressed: () => widget.onEditProduct(product),
                             ),
                             IconButton(
                               tooltip: 'حذف',
                               icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                              onPressed: onDeleteProduct == null ? null : () => onDeleteProduct!(product),
+                              onPressed: widget.onDeleteProduct == null
+                                  ? null
+                                  : () => widget.onDeleteProduct!(product),
                             ),
                           ],
                         ),
