@@ -1,4 +1,3 @@
-import 'package:dafter/core/backup/backup_service.dart';
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/features/sidebar/screens/sidebar_screen.dart';
 import 'package:flutter/material.dart';
@@ -10,12 +9,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
+  // bolaGpt1 is intentionally UI/UX-only. AppDatabase uses an in-memory
+  // database on this branch, so experiments never persist shop data to disk.
   await AppDatabase.instance.database;
-  // A backup failure must never prevent the POS from starting. The user can
-  // still create a backup explicitly from the close flow.
-  try {
-    await BackupService.instance.backupDatabase();
-  } catch (_) {}
 
   runApp(const DafterApp());
 }
@@ -35,8 +31,6 @@ class DafterApp extends StatelessWidget {
   }
 }
 
-/// Lives below MaterialApp so that its [BuildContext] has MaterialLocalizations
-/// when the native Windows close event asks us to show an AlertDialog.
 class _WindowCloseHandler extends StatefulWidget {
   const _WindowCloseHandler({required this.child});
 
@@ -55,10 +49,6 @@ class _WindowCloseHandlerState extends State<_WindowCloseHandler>
   void initState() {
     super.initState();
     windowManager.addListener(this);
-
-    // Wait until this widget is mounted below MaterialApp before intercepting
-    // the native Windows X. This gives showDialog a fully initialized
-    // Material/Localizations context when onWindowClose fires.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _configureWindowClose();
     });
@@ -79,8 +69,6 @@ class _WindowCloseHandlerState extends State<_WindowCloseHandler>
   Future<void> _closeWindow() async {
     if (_closingWindow) return;
     _closingWindow = true;
-
-    // Disable interception before closing so the native close can complete.
     await windowManager.setPreventClose(false);
     await windowManager.destroy();
   }
@@ -101,17 +89,14 @@ class _WindowCloseHandlerState extends State<_WindowCloseHandler>
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: const Text('قبل ما تقفل دفتر'),
-          content: const Text(
-            'تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟',
-          ),
+          content: const Text('تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, _CloseAction.cancel),
               child: const Text('إلغاء'),
             ),
             FilledButton.icon(
-              onPressed: () =>
-                  Navigator.pop(context, _CloseAction.backupAndClose),
+              onPressed: () => Navigator.pop(context, _CloseAction.backupAndClose),
               icon: const Icon(Icons.backup_outlined),
               label: const Text('نسخ احتياطي وإغلاق'),
             ),
@@ -119,41 +104,9 @@ class _WindowCloseHandlerState extends State<_WindowCloseHandler>
         ),
       );
 
+      // UI-only branch: the backup/close option simply closes. No shop data
+      // is persisted by this branch because its database is in-memory.
       if (!mounted || result == null || result == _CloseAction.cancel) return;
-
-      var directory = await BackupService.instance.getBackupDirectory();
-      if (directory == null) {
-        final selected = await BackupService.instance.chooseBackupDirectory();
-        if (!selected) return;
-        directory = await BackupService.instance.getBackupDirectory();
-      }
-      if (directory == null) return;
-
-      try {
-        final backup = await BackupService.instance.backupDatabase(force: true);
-        if (backup == null) return;
-      } catch (_) {
-        if (mounted) {
-          await showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Text('النسخ الاحتياطي فشل'),
-              content: const Text(
-                'مقدرتش أحفظ النسخة الاحتياطية، فالبرنامج مش هيتقفل عشان بياناتك تفضل آمنة.',
-              ),
-              actions: [
-                FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('تمام'),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
-      }
-
       await _closeWindow();
     } finally {
       _showingCloseDialog = false;
