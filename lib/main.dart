@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:dafter/core/database/app_database.dart';
 import 'package:dafter/features/sidebar/screens/sidebar_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core/app_theme.dart';
@@ -9,10 +13,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  // bolaGpt1 is intentionally UI/UX-only. AppDatabase uses an in-memory
-  // database on this branch, so experiments never persist shop data to disk.
-  await AppDatabase.instance.database;
+  // bolaGpt1 is a disposable UI/UX experiment. Remove its local database
+  // before opening the app so no test data survives between launches.
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+  try {
+    final path = join(await getDatabasesPath(), 'dafter.db');
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+  } catch (_) {}
 
+  await AppDatabase.instance.database;
   runApp(const DafterApp());
 }
 
@@ -89,7 +100,9 @@ class _WindowCloseHandlerState extends State<_WindowCloseHandler>
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: const Text('قبل ما تقفل دفتر'),
-          content: const Text('تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟'),
+          content: const Text(
+            'تحب تعمل نسخة احتياطية لبيانات المحل قبل ما تقفل البرنامج؟',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, _CloseAction.cancel),
@@ -104,8 +117,7 @@ class _WindowCloseHandlerState extends State<_WindowCloseHandler>
         ),
       );
 
-      // UI-only branch: the backup/close option simply closes. No shop data
-      // is persisted by this branch because its database is in-memory.
+      // This branch is disposable: the close action does not create a backup.
       if (!mounted || result == null || result == _CloseAction.cancel) return;
       await _closeWindow();
     } finally {
